@@ -1,0 +1,120 @@
+schemaVersion: 1
+meta:
+  sourceVersionId: ea1113df-4539-4df5-a2a4-37ae6d7461ec # DO NOT CHANGE - Hex uses this to match up project versions when reimporting the file
+  description: Welcome to DCR Setup Assistant.  This Notebook will pull down the latest DCR code and generate a custom script based on your inputs in the first cell of the Notebook.  Please populate the values in the first cell and then "Run all".  The output will show up in the File list on the left as dcr_output.zip.  Download the files so they can be used in a Snowflake worksheet.
+  projectId: ae9a6ea7-4020-49a3-87d7-3b6d55452be8 # DO NOT CHANGE - Unique ID of the project from which this file was generated
+  title: DCR Setup Assistant
+  timezone: null
+  codeLanguage: PYTHON
+  castDecimalsDefault: true
+projectAssets: {}
+sharedAssets: {}
+cells:
+  - cellId: 1cce6d9a-d081-4c1d-8917-3fda6f16f5e0 # DO NOT CHANGE - Hex uses this to match up cells when reimporting the file, and detect any changes to existing cells
+    cellLabel: null
+    cellType: CODE
+    config:
+      source: |-
+
+        # Enter an abbreviation, which will be leveraged as part of the database nomenclature
+        abbreviation = ''
+
+        # Enter the account identifier for both the provider and consumer accounts
+        # This should be just the account locator.  Anything beyond a '.' will be removed automatically
+        provider_account = ''
+        consumer_account = ''
+  - cellId: 480011e8-359c-4144-8135-31306f2e7940 # DO NOT CHANGE - Hex uses this to match up cells when reimporting the file, and detect any changes to existing cells
+    cellLabel: null
+    cellType: CODE
+    config:
+      source: |-
+        !git clone https://github.com/sfc-gh-mwalton/dcr-setup-notebook  # TODO Change to public repo
+        !mkdir /hex/output
+
+        import sys
+        sys.path.insert(0,'/hex/dcr-setup-notebook')  # TODO Change to public repo
+        #sys.path
+  - cellId: fb4ed29c-5c20-4e50-8cb5-ba4faf70d82e # DO NOT CHANGE - Hex uses this to match up cells when reimporting the file, and detect any changes to existing cells
+    cellLabel: null
+    cellType: CODE
+    config:
+      source: |-
+        import snowflake_dcr as dcr
+        data_clean_room = dcr.SnowflakeDcr()
+
+        dcr_version = '5.5 SQL Param'
+        provider_conn = None
+        consumer_conn = None
+        is_debug_mode = True
+
+        path = '/hex/dcr-setup-notebook/data-clean-room/'  # TODO Change to public repo
+
+        consumer_account_proper = consumer_account.split('.')[0].upper()
+        provider_account_proper = provider_account.split('.')[0].upper()
+
+        data_clean_room.prepare_deployment(is_debug_mode, dcr_version, provider_account_proper, provider_conn, consumer_account_proper, consumer_conn, abbreviation, path)
+        data_clean_room.execute_locally()
+  - cellId: 3581daef-28fe-449d-b460-fa36c4e05809 # DO NOT CHANGE - Hex uses this to match up cells when reimporting the file, and detect any changes to existing cells
+    cellLabel: null
+    cellType: CODE
+    config:
+      source: |-
+        from zipfile import ZipFile
+        import os
+
+        def get_all_file_paths(directory):
+
+            # initializing empty file paths list
+            file_paths = []
+
+            # crawling through directory and subdirectories
+            for root, directories, files in os.walk(directory):
+                for filename in files:
+                    # join the two strings in order to form the full filepath.
+                    filepath = os.path.join(root, filename)
+                    file_paths.append(filepath)
+
+            # returning all file paths
+            return file_paths
+
+        directory = '/hex/output/'
+
+        # calling function to get all file paths in the directory
+        file_paths = get_all_file_paths(directory)
+
+        # printing the list of all files to be zipped
+        print('Following files will be zipped:')
+        for file_name in file_paths:
+            print(file_name)
+
+        # writing files to a zipfile
+        with ZipFile('dcr_output.zip','w') as zip:
+            # writing each file one by one
+            for file in file_paths:
+                zip.write(file)
+  - cellId: 7c70f49e-9e11-4320-a43d-8df473e9a8a3 # DO NOT CHANGE - Hex uses this to match up cells when reimporting the file, and detect any changes to existing cells
+    cellLabel: null
+    cellType: MARKDOWN
+    config:
+      source: |-
+        ## Script File is now zipped and ready to download
+        ### Use the navigation on the left: Files - dcr_output.zip
+appLayout:
+  fullWidth: false
+  visibleMetadataFields:
+    - NAME
+    - DESCRIPTION
+    - AUTHOR
+    - LAST_EDITED
+    - CATEGORIES
+    - STATUS
+    - TABLE_OF_CONTENTS
+  rows:
+    - columns:
+        - start: 0
+          end: 120
+          elements:
+            - type: CELL
+              cellId: 7c70f49e-9e11-4320-a43d-8df473e9a8a3
+              height: null
+              showLabel: true
