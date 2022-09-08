@@ -1,6 +1,5 @@
-import os
 import re
-import glob
+import io
 
 
 class SnowflakeDcr:
@@ -13,6 +12,7 @@ class SnowflakeDcr:
 
     Attributes are populated by prepare_ methods
     """
+
     def __init__(self):
         self.is_debug_mode = None
         self.path = None
@@ -20,51 +20,56 @@ class SnowflakeDcr:
         self.script_conn_list = None
         self.check_words = None
         self.replace_words = None
+        self.prepared_script_dict = {}
+        self.cleaned_script_dict = {}
 
-    def execute_locally(self):
+    def execute(self):
         """
-        Runs a series of SQL scripts with some automated replacements, using local directories
+        Runs a series of SQL scripts with some automated replacements
         """
         if self.is_debug_mode is None or self.path is None or self.script_list is None:
             print("Run a prepare script first!")
         else:
-            # Clean up old files
-            files = glob.glob(os.getcwd() + "/output/*")
-            for f in files:
-                os.remove(f)
-
             # Prepare scripts
             comment_code_regex = re.compile(r"(?<!:)//.*")
 
             for current_script in self.script_list:
                 print("Starting " + current_script)
-                original_script = self.path + current_script + ".sql"
-                prepared_script = "output/" + current_script + "-prepared.sql"
+                original_script = current_script + ".sql"
+                original_script_full_path = self.path + original_script
                 script_index = self.script_list.index(current_script)
                 script_conn = self.script_conn_list[script_index]
+                prepared_script_text = ""
+                cleaned_script_text = ""
 
-                with open(original_script, "r", encoding='utf-8') as fin:
-                    with open(prepared_script, "w", encoding='utf-8') as fout:
-                        for line in fin:
-                            # Prepare temp file
-                            for check, replace in zip(self.check_words, self.replace_words):
-                                line = line.replace(check, replace)
+                # Prepared scripts still contain comments
+                with open(original_script_full_path, "r", encoding='utf-8') as fin:
+                    for line in fin:
+                        # Replace values
+                        for check, replace in zip(self.check_words, self.replace_words):
+                            line = line.replace(check, replace)
 
-                            # Remove commented SQL lines due to finicky execute_stream behavior
-                            line = re.sub(comment_code_regex, '', line)
+                        prepared_script_text += line
 
-                            fout.write(line)
+                        # Remove commented SQL lines due to finicky execute_stream behavior
+                        line = re.sub(comment_code_regex, '', line)
+
+                        cleaned_script_text += line
+
+                    self.prepared_script_dict[original_script] = prepared_script_text
+                    self.cleaned_script_dict[original_script] = cleaned_script_text
 
                 if not self.is_debug_mode:
                     print("Running statements for " + current_script)
-                    with open(prepared_script, "r", encoding='utf-8') as fout:
-                        # Run script
-                        for cur in script_conn.execute_stream(fout, remove_comments=True):
-                            print(cur.query)
-                            for ret in cur:
-                                print(ret)
+
+                    # Run script
+                    f = io.StringIO(cleaned_script_text)
+                    for cur in script_conn.execute_stream(f, remove_comments=True):
+                        print(cur.query)
+                        for ret in cur:
+                            print(ret)
                 else:
-                    print("Debug mode: File generated but not run for " + current_script)
+                    print("Debug mode: Script generated but not run for " + current_script)
 
     def prepare_deployment(self, is_debug_mode, dcr_version, provider_account, provider_conn, consumer_account,
                            consumer_conn, abbreviation, path):

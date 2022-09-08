@@ -14,11 +14,10 @@ This version of data clean room (v5.5) has these major enhancements from v5:
 
 # Deploying this code
 
-#### Option 1: Automated script generation via [Hex](https://hex.tech/)
-- Go to [Hex](https://hex.tech/)
-- Create an account + log in
-- Use the Import button and upload the "DCR Setup Assistant.yaml" file
-- Follow the directions to generate a zip file with ready-to-run scripts
+#### Option 1: Automated script generation via hosted [Streamlit](https://streamlit.io/)
+- Go to our Streamlit DCR Assistant Streamlit app [here]()
+- Enter a database abbreviation, provider & consumer account locators, run, and download
+- Run the scripts in the order below
 
 #### Option 2: Manual find/replace to prepare scripts
 Update all references to account CONSUMER_ACCT to the consumer account name and account PROVIDER_ACCT to the provider account name in the sql scripts in the data-clean-room directory.
@@ -31,7 +30,7 @@ The get_sql_js is a very similar Jinja interpreter, but is simplified to run in 
 If using Python UDF for true [Jinja](https://jinja.palletsprojects.com/en/3.1.x/) / [JinjaSQL](https://github.com/sripathikrishnan/jinjasql) support, update the request() procedure in consumer_init.sql and the process_requests() procedure in provider_enable_consumer.sql to reference get_sql_jinja instead of get_sql_js.
 
 #### Finally - Running the scripts
-Each script can be run as a batch, except consumer_request, which should be executed line-by-line. Run in this order:
+Each script can be run as a batch, except consumer_request, which should be executed line-by-line.  Runs scripts that start with "provider_" on the provider account, and likewise for consumer. Run in this order:
 
 1. provider_init
 2. provider_templates
