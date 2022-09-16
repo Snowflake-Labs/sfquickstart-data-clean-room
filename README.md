@@ -15,7 +15,7 @@ This version of data clean room (v5.5) has these major enhancements from v5:
 # Deploying this code
 
 #### Option 1: Automated script generation via hosted [Streamlit](https://streamlit.io/)
-- Go to our Streamlit DCR Assistant Streamlit app [here]()
+- Go to our Streamlit DCR Assistant Streamlit app [here](https://snowflake-labs-sfquickstart-data-cle-dcr-setup-assistant-bkx7gg.streamlitapp.com/)
 - Enter a database abbreviation, provider & consumer account locators, run, and download
 - Run the scripts in the order below
 
