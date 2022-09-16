@@ -23,8 +23,9 @@ st.sidebar.image("assets/bear_snowflake_hello.png")
 action = st.sidebar.radio("What action would you like to take?", ("Initial Deployment 🐻‍❄", "Add Add'l Consumer 🐧️",
                                                                   "Add Add'l Provider ☃️", "Uninstall 💧"))
 st.text("Generates scripts for managing version 5.5 Data Clean Rooms")
-st.text("This sample code is provided for reference purposes only.  Please note that this code is "
-        "provided “AS IS” and without warranty.  Snowflake will not offer any support for use of the sample code.")
+st.text("This sample code is provided for reference purposes only.")
+st.text("Please note that this code is provided “AS IS” and without warranty.")
+st.text("Snowflake will not offer any support for use of the sample code.")
 
 # Create dcr object
 data_clean_room = dcr.SnowflakeDcr()
