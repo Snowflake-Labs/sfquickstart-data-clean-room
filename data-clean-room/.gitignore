@@ -1,0 +1,6 @@
+build_templates/rendered/*
+*.j2
+*.swp
+*.DS_Store
+*.log.*
+*.log

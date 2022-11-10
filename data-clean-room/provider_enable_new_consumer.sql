@@ -20,7 +20,7 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-08-23          M. Rainey                           Remove differential privacy
 *************************************************************************************************************/
 
-use role accountadmin;
+use role data_clean_room_role;
 use warehouse app_wh;
 
 
@@ -63,5 +63,3 @@ ALTER TASK dcr_samp_provider_db.admin.process_requests_CONSUMER_ACCT_5 RESUME;
 call system$wait(8);
 ALTER TASK dcr_samp_provider_db.admin.process_requests_CONSUMER_ACCT_6 RESUME;
 show tasks in  dcr_samp_provider_db.admin;
-
-/*done*/

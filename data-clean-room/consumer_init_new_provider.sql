@@ -13,9 +13,10 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-06-30          M. Rainey                           Initial Creation
 2022-07-11          B. Klein                            Renamed _demo_ to _samp_ to support upgrades.
 2022-08-23          M. Rainey                           Remove differential privacy
+2022-11-08          B. Klein                            Python GA
 *************************************************************************************************************/
 
-use role accountadmin;
+use role data_clean_room_role;
 use warehouse app_wh;
 
 
@@ -26,16 +27,12 @@ use warehouse app_wh;
 // mount clean room app
 create or replace database dcr_samp_app_two from share PROVIDER2_ACCT.dcr_samp_app;
 
-// mount out-of-app-band firewall-protected provider data
-// create or replace database dcr_samp_data_two from share PROVIDER2_ACCT.dcr_samp_data;
-
 // see templates from provider
 select * from dcr_samp_app_two.cleanroom.templates;
 
 // verify this simple query can NOT see providers data
 select * from dcr_samp_app_two.cleanroom.provider_data;
 // returns no rows but can see column names
-
 
 // see the templates - provider2
 select * from dcr_samp_app_two.cleanroom.templates;
@@ -73,7 +70,7 @@ create or replace procedure dcr_samp_consumer.PROVIDER2_ACCT_schema.request(in_t
     if (at_timestamp) {
       at_timestamp = "'"+at_timestamp+"'";
     } else {
-      at_timestamp = "CURRENT_TIMESTAMP()::string";
+      at_timestamp = "SYSDATE()::string";
     };
 
     // create the request JSON object with a SQL statements
@@ -107,7 +104,7 @@ create or replace procedure dcr_samp_consumer.PROVIDER2_ACCT_schema.request(in_t
                                     right(settings::varchar,len(settings::varchar::varchar)-1)) as request_params
      from query_params, settings, request_params, app_instance_id
      ) , proposed_query as (
-             select dcr_samp_app_two.cleanroom.get_sql_jinja_js(
+             select dcr_samp_consumer.util.get_sql_jinja(
             (select template from dcr_samp_app_two.cleanroom.templates where template_name = rp.query_template), qpf.request_params) as proposed_query,
             sha2(proposed_query) as proposed_query_hash from query_params_full qpf, request_params rp)
      select rp.*, pq.*, f.request_params
@@ -142,5 +139,3 @@ grant select on dcr_samp_consumer.PROVIDER2_ACCT_schema.requests to share dcr_sa
 
 // modified for 3-party
 alter share dcr_samp_requests add accounts = PROVIDER2_ACCT;
-
-// ----> ON FIRST SETUP, NOW GO TO PROVIDER 2 SIDE AND ENABLE THIS CONSUMER -- REQUEST HANDLING STREAM AND TASK

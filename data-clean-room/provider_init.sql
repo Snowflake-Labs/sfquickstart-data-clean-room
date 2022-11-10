@@ -24,387 +24,59 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-08-05          B. Klein                            Uncommented get_sql_jinja to facilitate DCR Assistant
 2022-08-23          M. Rainey                           Remove differential privacy
 2022-08-30          D. Cole, B. Klein                   Added new javascript jinja template engine
+2022-10-24          B. Klein                            Separated framework code and demo data
+2022-11-08          B. Klein                            Python GA
 *************************************************************************************************************/
 
 
 use role accountadmin;
+
+create role if not exists data_clean_room_role;
+
+// may need to drop and re-add warehouse if already created by accountadmin
+//drop warehouse app_wh;
+
+grant create share on account to role data_clean_room_role;
+grant import share on account to role data_clean_room_role;
+grant create database on account to role data_clean_room_role;
+grant create warehouse on account to role data_clean_room_role;
+grant execute task on account to role data_clean_room_role;
+grant role data_clean_room_role to role sysadmin;
+use role data_clean_room_role;
+
 create warehouse if not exists app_wh;
 
 //cleanup//
-// drop share if exists dcr_samp_data;
 drop share if exists dcr_samp_app;
 
 ///////
-/// CREATE PROVIDER_ACCT DATA
+/// CREATE PROVIDER_ACCT DATA SCHEMAS
 ///////
 
 // create database and schema for the app
 create or replace database dcr_samp_provider_db;
-//create or replace schema dcr_samp_provider_db.installer_schema;
 
 // create schema for provider objects that app instances can securely utilize
 create or replace schema dcr_samp_provider_db.shared_schema;
 
-// generate sample customers with emails and features
-create or replace table dcr_samp_provider_db.shared_schema.customers as
-select 'user'||seq4()||'_'||uniform(1, 3, random())||'@email.com' as email,
- replace(to_varchar(seq4() % 999, '000') ||'-'||to_varchar(seq4() % 888, '000')||'-'||to_varchar(seq4() % 777, '000')||uniform(1, 10, random()),' ','') as phone,
-  case when uniform(1,10,random())>3 then 'MEMBER'
-       when uniform(1,10,random())>5 then 'SILVER'
-       when uniform(1,10,random())>7 then 'GOLD'
-else 'PLATINUM' end as status,
-round(18+uniform(0,10,random())+uniform(0,50,random()),-1)+5*uniform(0,1,random()) as age_band
-  from table(generator(rowcount => 1000000));
-
-create or replace table dcr_samp_provider_db.shared_schema.exposures as
-select email, 'campaign_'||uniform(1,3,random()) as campaign,
-  case when uniform(1,10,random())>3 then 'STREAMING'
-       when uniform(1,10,random())>5 then 'MOBILE'
-       when uniform(1,10,random())>7 then 'LINEAR'
-else 'DISPLAY' end as device_type,
-('2021-'||uniform(3,5,random())||'-'||uniform(1,30,random()))::date as exp_date,
-uniform(1,60,random()) as sec_view,
-uniform(0,2,random())+uniform(0,99,random())/100 as exp_cost
-from dcr_samp_provider_db.shared_schema.customers sample (20);
-select ('2021-'||uniform(3,5,random())||'-'||uniform(1,30,random()))::date as exp_date;
-
-// generate subscription information for users
-create or replace table dcr_samp_provider_db.shared_schema.subscriptions as
-select
-        'user'||seq4()||'_'||uniform(1, 3, random())||'@email.com' as email
-    ,   uniform(0,1,random()) as is_subscribed
-from table(generator(rowcount => 1000000));
-
-//select * from dcr_samp_provider_db.shared_schema.customers;
-//select * from dcr_samp_provider_db.shared_schema.exposures;
-//select * from dcr_samp_provider_db.shared_schema.subscriptions;
-
 /////
-// SETUP TEMPLATES
+// SETUP TEMPLATE PROCESSING
 /////
 
 use database dcr_samp_provider_db;
 create or replace schema templates;
-create or replace schema util;
 create or replace schema admin;
 create schema dcr_samp_provider_db.cleanroom;
 
 use schema dcr_samp_provider_db.templates;
 
-// Javascript jinja-like interpreter - supports Jinja parsing, but does not actually use the Jinja engine
-create or replace secure function dcr_samp_provider_db.cleanroom.get_sql_jinja_js(template string, parameters variant)
-    returns string
-    language javascript
-as
-$$
-    const template = TEMPLATE;
-    const parameters = PARAMETERS;
-
-    // seed local variables (LIFO)
-    let localVars = Object.assign({}, ...Object.keys(parameters).map((k) => ({ [k.toLowerCase()]: [ parameters[k] ] })));
-
-    // classify some potential errors
-    const NotFound = Symbol('NotFound');
-    const NotDefined = Symbol('NotDefined');
-    const Unsupported = Symbol('Unsupported');
-    const NoValue = Symbol('NoValue');
-    const ParseError = Symbol('ParseError');
-    class MyError extends Error {
-        constructor(type, message) {
-            super(message);
-            this.type = type
-        }
-    }
-
-    // variable literals -> variable values
-    // (base) variable must exist
-    // foo -> $foo
-    // foo[i] -> $foo[i]
-    // foo[i:] -> $foo.slice(i)
-    // foo[:j] -> $foo.slice(0,j)
-    // foo[i:j] -> $foo.slice(i,j)
-    // foo.split() -> $foo.split() (also ...split('x') and ...split(/x/) and ...split('x', 3) and ...split(/x/, 3))
-    // or any combination thereof...
-    // more rewrites possible...
-    const strToVal = (str) => {
-        const getKey = (str) => {
-            let key = /^(\w+)/.exec(str)[1];
-            if (key == null)
-                throw new MyError(NotFound, "variable name not found in '" + str + "'");
-            return key;
-        };
-
-        const getVal = (key) => {
-            let k = key.toLowerCase();
-            let val = k in localVars && localVars[k].length ? localVars[k][0] : null;
-            if (val == null)
-                throw new MyError(NotDefined, "variable '" + key + "' not defined");
-            return val;
-        };
-
-        try {
-            let key = getKey(str);
-            let val = getVal(key);
-            str = str.substring(key.length);
-            if (str.length) {
-                let m;
-                while (str.length) {
-                    switch(true) {
-                        case (m = /^(\[(\d+)\])/.exec(str)) != null:
-                            val = val[m[2]];
-                            break;
-                        case (m = /^(\[(\d+):(\d+)?\])/.exec(str)) != null:
-                            val = m[3] == null ? val.slice(m[2]) : val.slice(m[2], m[3]);
-                            break;
-                        case (m = /^(\[(\d+)?:(\d+)\])/.exec(str)) != null:
-                            val = m[2] == null ? val.slice(0, m[3]) : val.slice(m[2], m[3]);
-                            break;
-                        case (m = /^(\.split\((?:\s*(['"/])?(.*?)\2\s*)(?:\s*,\s*(\d*)\s*)?\))/i.exec(str)) != null:
-                            let s = m[2] == '/' ? new RegExp(m[3], 'g') : m[3];
-                            val = m[3] == null ? val.split() : m[4] == null ? val.split(s) : val.split(s, m[4]);
-                            break;
-                        default:
-                            throw new MyError(Unsupported, "unsupported operator against variable '" + key + "' in '" + str + "'");
-                    }
-                    str = str.substring(m[1].length);
-                }
-            }
-            if (typeof val === 'undefined')
-                throw new MyError(NoValue, "variable '" + key + "' has no value");
-            return val;
-        }
-        catch (error) {
-            throw error;
-        }
-    };
-
-    // white space
-    // <value>
-    const WhiteSpaceRegex = /^((?:(?!\{[%{#])\s)+)/s;
-    class WhiteSpace {
-        constructor(args) {
-            this.original = args[0];
-            this.value = args[1];
-        }
-        rewrite() {
-            return this.value;
-        }
-    }
-
-    // string literal
-    // <value>
-    const StringLiteralRegex = /^((?:(?!\{[%{#])\S)+)/s;
-    class StringLiteral {
-        constructor(args) {
-            this.original = args[0];
-            this.value = args[1];
-        }
-        rewrite() {
-            return this.value;
-        }
-    }
-
-    // jinja for statement
-    // {% for <iterator> in <iterable> %}
-    // <block>
-    // {% endfor %}
-    // <iterator> and <iterable> cannot be null
-    // <iterator> is scoped for this <block>
-    // (base) <iterable> must exist
-    // <block> is on its own line(s)
-    const JinjaForStatementRegex = /^\{%\s*for\s+(.+?)\s+in\s+(.+?)\s*%}(.+?){%\s*endfor\s*%}(?:\n[ \t]+)?/is;
-    class JinjaForStatement {
-        constructor(args) {
-            this.original = args[0];
-            this.iterator = args[1];
-            this.iterable = args[2];
-            this.block = parse(args[3]);
-        }
-        rewrite() {
-            try {
-                let result = '';
-                let k = this.iterator.toLowerCase();
-                if (!(k in localVars))
-                    localVars[k] = [];
-                let iterable = strToVal(this.iterable);
-                for (let iterator in iterable) {
-                    localVars[k].unshift(iterable[iterator]);
-                    this.block.forEach((b) => { result += b.rewrite(); });
-                    localVars[k].shift();
-                }
-                return result;
-            }
-            catch (error) {
-                throw error;
-            }
-        }
-    }
-
-    // jinja if statement class
-    // {% if <variable> %}
-    // <block>
-    // {% endif %}
-    // <variable> cannot be null
-    // <block> is rewritten if <variable> exists
-    // <block> is on its own line(s)
-    const JinjaIfStatementRegex = /^\{%\s*if\s+(.+?)\s*%}(.+?)\{%\s*endif\s*%}(?:\n[ \t]+)?/is;
-    class JinjaIfStatement {
-        constructor(args) {
-            this.original = args[0];
-            this.variable = args[1];
-            this.block = parse(args[2]);
-        }
-        rewrite() {
-            try {
-                let result = '';
-                if (strToVal(this.variable))
-                    this.block.forEach((b) => { result += b.rewrite(); });
-                return result;
-            }
-            catch (error) {
-                if (error.type == NotFound || error.type == NotDefined || error.type == NoValue)
-                    return '';
-                else
-                    throw error;
-            }
-        }
-    }
-
-    // jinja set statement class
-    // {% set <variable> = <expr> [{% endset ]%}
-    // <variable> and <expr> cannot be null
-    // <expr> limited to defined variables and supported functions
-    const JinjaSetStatementRegex = /^\{%\s*set\s+(.+?)\s*=\s*(.+?)\s*(?:{%\s*endset\s*)?%}/is;
-    class JinjaSetStatement {
-        constructor(args) {
-            this.original = args[0];
-            this.variable = args[1];
-            this.expr = args[2];
-        }
-        rewrite() {
-            try {
-                let k = this.variable.toLowerCase();
-                if (!(k in localVars))
-                    localVars[k] = []
-                localVars[k].unshift(strToVal(this.expr));
-                return '';
-            }
-            catch (error) {
-                throw error;
-            }
-        }
-    }
-
-    // a jinja expression class
-    // {{ <expr>[ | <filter> ] }}
-    // <expr> must exist
-    // <expr> limited to substitutions plus supported operations (slicing, splitting, etc)
-    // ignoring <filter> (for now...)
-    const JinjaExpressionRegex = /^\{\{\s*(.+?)(?:\s*\|\s*(.+?))?\s*}}/is;
-    class JinjaExpression {
-        constructor(args) {
-            this.original = args[0];
-            this.expr = args[1];
-            this.filter = args[2];
-        }
-        rewrite() {
-            try {
-                let v = strToVal(this.expr);
-
-                if (this.filter == undefined) {
-                    return "'" + v + "'";
-                }
-
-                switch(this.filter.toLowerCase()) {
-                    case 'sqlsafe':
-                        return v;
-                    case 'inclause':
-                        let str = "("
-                        v.forEach((element,index) => {
-                            if(index==0) {
-                                if (typeof element ==='string') {
-                                    str += "'" + element + "'";
-                                } else {
-                                    str += element;
-                                }
-                            } else {
-                                if (typeof element ==='string') {
-                                    str += ",'" + element + "'";
-                                } else {
-                                    str += "," + element;
-                                }
-                            }
-                        })
-                        str += ")";
-                        return str;
-                    default:
-                        return "'" + v + "'";
-                }
-            }
-            catch (error) {
-                throw error;
-            }
-        }
-    }
-
-    // jinja comment class
-    // {# <block> #}
-    // comments are stripped from the result
-    const JinjaCommentRegex = /^\{#\s*(.*?)\s*#}/is;
-    class JinjaComment {
-        constructor(args) {
-            this.original = args[0];
-            this.block = args[1];
-        }
-        rewrite() {
-            return '';
-        }
-    }
-
-    const parse = str => {
-        let result = [];
-
-        let m;
-        while (str.length) {
-            if ((m = JinjaForStatementRegex.exec(str)) != null)
-                result.push(new JinjaForStatement(m));
-            else if ((m = JinjaIfStatementRegex.exec(str)) != null)
-                result.push(new JinjaIfStatement(m));
-            else if ((m = JinjaSetStatementRegex.exec(str)) != null)
-                result.push(new JinjaSetStatement(m));
-            else if ((m = JinjaExpressionRegex.exec(str)) != null)
-                result.push(new JinjaExpression(m));
-            else if ((m = JinjaCommentRegex.exec(str)) != null)
-                result.push(new JinjaComment(m));
-            else if ((m = StringLiteralRegex.exec(str)) != null)
-                result.push(new StringLiteral(m));
-            else if ((m = WhiteSpaceRegex.exec(str)) != null)
-                result.push(new WhiteSpace(m));
-            else
-                throw new MyError(ParseError, "unable to parse '" + str + "'");
-            str = str.substring(m[0].length);
-        }
-
-        return result;
-    };
-
-    // rewrite the parsed objects
-    const rewrite = objects => {
-        return objects.map(o => o.rewrite()).join("").split("\n").filter(r => r.trim().length).join("\n");
-    };
-
-    return rewrite(parse(template));
-$$;
-
-// Python jinja function - actually uses the Jinja engine, but requries Python UDFs
-// The function is not used unless swapped in the requests() and process_requests() procedures
-/*python
-create or replace function dcr_samp_provider_db.templates.get_sql_jinja_py(template string, parameters variant)
+// Python jinja function
+create or replace function dcr_samp_provider_db.templates.get_sql_jinja(template string, parameters variant)
   returns string
   language python
   runtime_version = 3.8
   handler='apply_sql_template'
-  packages = ('six','jinja2')
+  packages = ('six','jinja2==3.0.3','markupsafe')
 as
 $$
 # Most of the following code is copied from the jinjasql package, which is not included in Snowflake's python packages
@@ -418,7 +90,7 @@ from jinja2 import Environment
 from jinja2 import Template
 from jinja2.ext import Extension
 from jinja2.lexer import Token
-from jinja2.utils import Markup
+from markupsafe import Markup
 
 try:
     from collections import OrderedDict
@@ -467,12 +139,9 @@ class SqlExtension(Extension):
         {{ some.variable | filter1 | filter 2}}
             to
         {{ ( some.variable | filter1 | filter 2 ) | bind}}
-
         ... for all variable declarations in the template
-
         Note the extra ( and ). We want the | bind to apply to the entire value, not just the last value.
         The parentheses are mostly redundant, except in expressions like {{ '%' ~ myval ~ '%' }}
-
         This function is called by jinja2 immediately
         after the lexing stage, but before the parser is called.
         """
@@ -514,7 +183,6 @@ def sql_safe(value):
 def bind(value, name):
     """A filter that prints %s, and stores the value
     in an array, so that it can be bound using a prepared statement
-
     This filter is automatically applied to every {{variable}}
     during the lexing stage, so developers can't forget to bind
     """
@@ -579,7 +247,6 @@ class JinjaSql(object):
     def _prepare_environment(self):
         self.env.autoescape=True
         self.env.add_extension(SqlExtension)
-        self.env.add_extension('jinja2.ext.autoescape')
         self.env.filters["bind"] = bind
         self.env.filters["sqlsafe"] = sql_safe
         self.env.filters["inclause"] = bind_in_clause
@@ -648,7 +315,6 @@ def apply_sql_template(template, parameters):
     return strip_blank_lines(get_sql_from_template(query, bind_params))
 
 $$;
-python*/
 
 
 //////
@@ -674,18 +340,10 @@ create or replace table dcr_samp_provider_db.templates.dcr_templates (party_acco
 create or replace secure view dcr_samp_provider_db.cleanroom.templates as
 select * from dcr_samp_provider_db.templates.dcr_templates  where current_account() = party_account;
 
-// if you want to edit the templates, run this then re-insert them
-// delete from dcr_samp_provider_db.templates.dcr_templates;
-
 
 //////////
 // CREATE CLEAN ROOM UTILITY FUNCTIONS
 //////////
-
-// add RAP to dcr_samp_provider_db.shared_schema.customers
-
-// see that customer table is not yet protected with a data firewall
-select * from dcr_samp_provider_db.shared_schema.customers;
 
 // create a request tracking table that will also contain allowed statements
 create or replace table dcr_samp_provider_db.admin.request_log
@@ -696,16 +354,10 @@ create or replace table dcr_samp_provider_db.admin.request_log
 create or replace secure view dcr_samp_provider_db.cleanroom.provider_log as
 select * from dcr_samp_provider_db.admin.request_log where current_account() = party_account;
 
-//////////////////
-// Protect providers base table with Data Firewall
-//////////////////
 
-//alter session set ENABLE_ROW_ACCESS_POLICY = true;
-
-// shields down
-//alter table dcr_samp_provider_db.shared_schema.customers drop row access policy dcr_samp_provider_db.shared_schema.data_firewall;
-//alter table dcr_samp_provider_db.shared_schema.exposures drop row access policy dcr_samp_provider_db.shared_schema.data_firewall;
-//alter table dcr_samp_provider_db.shared_schema.subscriptions drop row access policy dcr_samp_provider_db.shared_schema.data_firewall;
+//////////////////
+// ADD DATA FIREWALL ROW ACCESS POLICY
+//////////////////
 
 create or replace row access policy dcr_samp_provider_db.shared_schema.data_firewall as (foo varchar) returns boolean ->
     exists  (select request_id from dcr_samp_provider_db.admin.request_log w
@@ -716,49 +368,18 @@ create or replace row access policy dcr_samp_provider_db.shared_schema.data_fire
 //see request log
 select * from dcr_samp_provider_db.admin.request_log;
 
-// shields up
-alter table dcr_samp_provider_db.shared_schema.customers add row access policy dcr_samp_provider_db.shared_schema.data_firewall on (email);
-alter table dcr_samp_provider_db.shared_schema.exposures add row access policy dcr_samp_provider_db.shared_schema.data_firewall on (email);
-alter table dcr_samp_provider_db.shared_schema.subscriptions add row access policy dcr_samp_provider_db.shared_schema.data_firewall on (email);
-
-// test RAP
-select * from dcr_samp_provider_db.shared_schema.customers;  // should now return no rows
-select * from dcr_samp_provider_db.shared_schema.exposures;  // should now return no rows
-select * from dcr_samp_provider_db.shared_schema.subscriptions;  // should now return no rows
-
-// create the view and schema to share the protected provider data
-create or replace secure view dcr_samp_provider_db.cleanroom.provider_data as select * from  dcr_samp_provider_db.shared_schema.customers;
-create or replace secure view dcr_samp_provider_db.cleanroom.provider_exposure_data as select * from dcr_samp_provider_db.shared_schema.exposures;
-create or replace secure view dcr_samp_provider_db.cleanroom.provider_subscription_data as select * from dcr_samp_provider_db.shared_schema.subscriptions;
 
 //////
-// share cleanroom
+// SHARE CLEANROOM
 //////
 
-// Share 1: Out of Band share from P-C for Ps data
-// Note: this share was meant to mimic a v6 workaround that no longer exists and will be combined with dcr_samp_app share
-
-//create or replace share dcr_samp_data;
-//grant usage on database dcr_samp_provider_db to share dcr_samp_data;
-//grant usage on schema dcr_samp_provider_db.cleanroom to share dcr_samp_data;
-
-//alter share dcr_samp_data add accounts = CONSUMER_ACCT;
-
-// SHARE 2: the clean room Application Share
 // create application share : Updated using normal share without native app
 create or replace share dcr_samp_app ;
 
 // make required grants
 grant usage on database dcr_samp_provider_db to share dcr_samp_app;
 grant usage on schema dcr_samp_provider_db.cleanroom to share dcr_samp_app;
-//grant select on dcr_samp_provider_db.cleanroom.keys_share to share dcr_samp_app;
 grant select on dcr_samp_provider_db.cleanroom.provider_log to share dcr_samp_app;
 grant select on dcr_samp_provider_db.cleanroom.provider_account to share dcr_samp_app;
 grant select on dcr_samp_provider_db.cleanroom.templates to share dcr_samp_app;
-grant select on dcr_samp_provider_db.cleanroom.provider_data to share dcr_samp_app;
-grant select on dcr_samp_provider_db.cleanroom.provider_exposure_data to share dcr_samp_app;
-grant select on dcr_samp_provider_db.cleanroom.provider_subscription_data to share dcr_samp_app;
-GRANT USAGE ON FUNCTION dcr_samp_provider_db.cleanroom.get_sql_jinja_js(string, variant) TO SHARE dcr_samp_app;
 alter share dcr_samp_app add accounts = CONSUMER_ACCT;
-
-/// ---> NOW, COMPLETE CONSUMER_ACCT SIDE SETUP

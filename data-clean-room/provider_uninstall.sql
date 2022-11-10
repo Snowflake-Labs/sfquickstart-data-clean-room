@@ -12,7 +12,7 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-08-05          B. Klein                            Initial Creation
 *************************************************************************************************************/
 
-use role accountadmin;
+use role data_clean_room_role;
 
 //cleanup//
 drop share if exists dcr_samp_app;

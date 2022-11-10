@@ -14,7 +14,7 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-07-11          B. Klein                            Renamed _demo_ to _samp_ to support upgrades.
 *************************************************************************************************************/
 
-use role accountadmin;
+use role data_clean_room_role;
 use warehouse app_wh;
 
 
@@ -26,6 +26,4 @@ use warehouse app_wh;
 
 
 // add new consumer account to shares
-
-// alter share dcr_samp_data add accounts = CONSUMER_ACCT;
 alter share dcr_samp_app add accounts = CONSUMER_ACCT;
