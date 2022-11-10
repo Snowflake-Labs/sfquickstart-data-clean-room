@@ -27,9 +27,10 @@ Date(yyyy-mm-dd)    Author                              Comments
                                                         that was failing silently.
 2022-07-11          B. Klein                            Renamed _demo_ to _samp_ to support upgrades.
 2022-08-23          M. Rainey                           Remove differential privacy
+2022-11-08          B. Klein                            Python GA
 *************************************************************************************************************/
 
-use role accountadmin;
+use role data_clean_room_role;
 use warehouse app_wh;
 
 /////
@@ -125,7 +126,7 @@ request_tbl_sql_exec.next();
         ,req.REQUEST_PARAMS
         from dcr_samp_provider_db.admin.request_tmp req
           )
-        select requester_account,REQUEST_ID,request_ts,request,NULL,NULL,query_template,NULL,NULL,current_timestamp(),:2,:1 from request;`;
+        select requester_account,REQUEST_ID,request_ts,request,NULL,NULL,query_template,NULL,NULL,SYSDATE(),:2,:1 from request;`;
 
   //1.TimeStamp check that request is not too old or from the future
 
@@ -133,7 +134,7 @@ request_tbl_sql_exec.next();
      result.next();
      var request_ts = result.getColumnValue(1);
 
-     var result = snowflake.execute({ sqlText: `select datediff('minute','`+request_ts+`'::TIMESTAMP,CURRENT_TIMESTAMP());` });
+     var result = snowflake.execute({ sqlText: `select datediff('minute','`+request_ts+`'::TIMESTAMP,SYSDATE());` });
      result.next();
      var request_minutes_old = result.getColumnValue(1);
 
@@ -196,7 +197,7 @@ query_params_full as (
         from dcr_samp_provider_db.admin.request_tmp
        ),
 proposed_query as (
- select dcr_samp_provider_db.cleanroom.get_sql_jinja_js(
+ select dcr_samp_provider_db.templates.get_sql_jinja(
      (select any_value(template) from dcr_samp_provider_db.templates.dcr_templates where template_name = rp.query_template
        and party_account=rp.requester_account), qpf.request_params) as proposed_query,
        request:PROPOSED_QUERY_HASH::varchar as proposed_query_hash
@@ -223,7 +224,7 @@ validate_sql as (
   request.REQUEST_ID request_id,
   t.template template,
   t.template_name template_name,
-  dcr_samp_provider_db.cleanroom.get_sql_jinja_js(template, request_params) as valid_sql,
+  dcr_samp_provider_db.templates.get_sql_jinja(template, request_params) as valid_sql,
   proposed_query = valid_sql as VALID_QUERY,
   sha2(valid_sql) as valid_sql_hash,
   t.dp_sensitivity sensitivity,
@@ -243,7 +244,7 @@ select DISTINCT r.requester_account,
        vs.template_name,
        NULL,
        NULL,
-       current_timestamp(),
+       SYSDATE(),
        v.VALID_HASH AND vs.VALID_QUERY  as approved
         ,'None'
 from request r, validate v, validate_sql vs
@@ -312,7 +313,7 @@ show tasks in  dcr_samp_provider_db.admin;
 
 // use this if needed to debug request failures, it provides visiblity to the results of each validation
 // request_tmp table must be a permanent or transient table in the process_requests procedure.
-
+/*
 with request as (
  select req.REQUEST_ID
  ,req.query_template query_template
@@ -328,7 +329,7 @@ query_params_full as (
         from dcr_samp_provider_db.admin.request_tmp
        ),
 proposed_query as (
- select dcr_samp_provider_db.cleanroom.get_sql_jinja_js(
+ select dcr_samp_provider_db.templates.get_sql_jinja(
      (select any_value(template) from dcr_samp_provider_db.templates.dcr_templates where template_name = rp.query_template
        and party_account=rp.requester_account), qpf.request_params) as proposed_query,
        request:PROPOSED_QUERY_HASH::varchar as proposed_query_hash
@@ -355,7 +356,7 @@ validate_sql as (
   request.REQUEST_ID request_id,
   t.template template,
   t.template_name template_name,
-  dcr_samp_provider_db.cleanroom.get_sql_jinja_js(template, request_params) as valid_sql,
+  dcr_samp_provider_db.templates.get_sql_jinja(template, request_params) as valid_sql,
   proposed_query = valid_sql as VALID_QUERY,
   sha2(valid_sql) as valid_sql_hash,
   t.dp_sensitivity sensitivity,
@@ -374,10 +375,11 @@ select DISTINCT r.requester_account,
        vs.VALID_SQL_HASH,
        vs.template_name,
        vs.sensitivity,
-       current_timestamp(),
+       SYSDATE(),
        v.VALID_HASH AND vs.VALID_QUERY  as approved
         ,'None'
 from request r, validate v, validate_sql vs
 where r.REQUEST_ID = v.request_id and
       r.REQUEST_ID = vs.request_id and
       r.provider_accounts = CURRENT_ACCOUNT();
+*/

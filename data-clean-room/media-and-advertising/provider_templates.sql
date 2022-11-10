@@ -1,8 +1,8 @@
 /*************************************************************************************************************
-Script:             Data Clean Room - v5.5 - Provider Templates
+Script:             Data Clean Room - v5.5 - Provider Templates, Media & Advertising
 Create Date:        2022-02-09
 Author:             J. Langseth, M. Rainey
-Description:        Provider insert query Jinja templates
+Description:        Provider Jinja templates
 
 Copyright © 2022 Snowflake Inc. All rights reserved
 *************************************************************************************************************
@@ -20,14 +20,17 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-08-23          M. Rainey                           Remove differential privacy
 2022-08-31          B. Klein                            Renamed back to provider_templates now that we have
                                                         the javascript jinja-like parser
+2022-11-08          B. Klein                            Python GA
 *************************************************************************************************************/
+
+
+use role data_clean_room_role;
+use warehouse app_wh;
+
 
 /////
 // PROVIDER_ACCT TEMPLATES
 /////
-
-use role accountadmin;
-use warehouse app_wh;
 
 // if you want to edit the templates, run this then re-insert them
 // delete from dcr_samp_provider_db.templates.dcr_templates;
@@ -46,8 +49,8 @@ select
     , {% endif %}
     count(distinct p.email) as overlap
 from
-    {{ app_data | sqlsafe }}.cleanroom.provider_data p,
-    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_tz) c
+    {{ app_data | sqlsafe }}.cleanroom.provider_customers_vw p,
+    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_ntz) c
 where
     c.{{ consumer_join_field | sqlsafe }} = p.email
     and exists (select table_name from {{ consumer_db | sqlsafe }}.information_schema.tables where table_schema = upper('{{ consumer_schema | sqlsafe }}') and table_name = upper('{{ consumer_table| sqlsafe }}') and table_type = 'BASE TABLE')
@@ -74,9 +77,9 @@ select
     {% endfor %}
     , count(distinct p.email) as overlap
 from
-    {{ app_data | sqlsafe }}.cleanroom.provider_data p,
-    {{ app_data_two | sqlsafe }}.cleanroom.provider_data p2,
-    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_tz) c
+    {{ app_data | sqlsafe }}.cleanroom.provider_customers_vw p,
+    {{ app_data_two | sqlsafe }}.cleanroom.provider_customers_vw p2,
+    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_ntz) c
 where
     c.{{ consumer_join_field | sqlsafe }} = p.email
     and c.{{ consumer_join_field | sqlsafe }} = p2.email
@@ -104,8 +107,8 @@ select
     {% endfor %}
     , count(distinct p.email) as overlap
 from
-    {{ app_data | sqlsafe }}.cleanroom.provider_data p
-join    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_tz) c
+    {{ app_data | sqlsafe }}.cleanroom.provider_customers_vw p
+join    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_ntz) c
 on  (
       c.{{ consumer_email_field | sqlsafe }} = p.email
       or c.{{ consumer_phone_field | sqlsafe }} = p.phone
@@ -135,11 +138,11 @@ select
     {% endfor %}
     , count(distinct p.email) as conversion_count
 from
-    {{ app_data | sqlsafe }}.cleanroom.provider_data p,
-    {{ app_data | sqlsafe }}.cleanroom.provider_exposure_data p_exp,
-    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_customer_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_tz) c
+    {{ app_data | sqlsafe }}.cleanroom.provider_customers_vw p,
+    {{ app_data | sqlsafe }}.cleanroom.provider_exposures_vw p_exp,
+    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_customer_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_ntz) c
 join
-    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_conversions_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_tz) c_conv
+    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_conversions_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_ntz) c_conv
         on c.{{ consumer_internal_join_field | sqlsafe }} = c_conv.{{ consumer_internal_join_field | sqlsafe }}
 where
     (
@@ -180,10 +183,10 @@ select
     {% endfor %}
     , count(distinct p.email) as overlap
 from
-    {{ app_data | sqlsafe }}.cleanroom.provider_data p,
-    {{ app_two_data | sqlsafe }}.cleanroom.provider_data p2,
-    {{ app_three_data | sqlsafe }}.cleanroom.provider_subscription_data p3,
-    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_tz) c
+    {{ app_data | sqlsafe }}.cleanroom.provider_customers_vw p,
+    {{ app_two_data | sqlsafe }}.cleanroom.provider_customers_vw p2,
+    {{ app_three_data | sqlsafe }}.cleanroom.provider_subscriptions_vw p3,
+    {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_ntz) c
 where
     c.{{ consumer_join_field | sqlsafe }} = p.email
     and c.{{ consumer_join_field | sqlsafe }} = p2.email
@@ -207,7 +210,7 @@ $$,'c.pets|c.zip|c.high_value|p.status|p.age_band|p.region_code', 'SQL');
 
 /*
 // test template and sql renderer (note resulting sql will not run in this account)
-select dcr_samp_provider_db.templates.get_sql_jinja_js(
+select dcr_samp_provider_db.templates.get_sql_jinja(
   (select template from dcr_samp_provider_db.templates.dcr_templates where template_name = 'campaign_conversion'),
    object_construct(
             'dimensions',array_construct( 'conv.product' ),
@@ -221,6 +224,6 @@ select dcr_samp_provider_db.templates.get_sql_jinja_js(
             'consumer_internal_join_field','email',
             'app_instance','consumer_app_instance_db',
             'app_data','dcr_samp_provider_db',
-            'at_timestamp',current_timestamp()
+            'at_timestamp',SYSDATE()
             ));
 */

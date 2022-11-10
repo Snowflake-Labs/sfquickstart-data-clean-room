@@ -1,10 +1,12 @@
 import re
 import io
+import glob
+import os
 
 
 class SnowflakeDcr:
     """
-    A class used to represent a Snowflake data clean room
+    A class used to represent a Snowflake data clean room or ID resolution native app
     To use:
         - instantiate the class
         - run a prepare_ method to populate attributes
@@ -31,12 +33,15 @@ class SnowflakeDcr:
             print("Run a prepare script first!")
         else:
             # Prepare scripts
-            comment_code_regex = re.compile(r"(?<!:)//.*")
+            comment_code_regex_slash = re.compile(r"(?<!:)//.*")
+            comment_code_regex_dash = re.compile(r"(?<!:)--.*")
+            snowsql_code_regex = re.compile(r"^(?<!:)!.*")
 
             for current_script in self.script_list:
                 print("Starting " + current_script)
-                original_script = current_script + ".sql"
+                original_script = current_script
                 original_script_full_path = self.path + original_script
+                original_script_no_path = os.path.basename(original_script_full_path)
                 script_index = self.script_list.index(current_script)
                 script_conn = self.script_conn_list[script_index]
                 prepared_script_text = ""
@@ -49,17 +54,21 @@ class SnowflakeDcr:
                         for check, replace in zip(self.check_words, self.replace_words):
                             line = line.replace(check, replace)
 
+                        # Remove SnowSQL lines to enable easier running in worksheets
+                        line = re.sub(snowsql_code_regex, '', line)
+
                         prepared_script_text += line
 
                         # Remove commented SQL lines due to finicky execute_stream behavior
-                        line = re.sub(comment_code_regex, '', line)
+                        line = re.sub(comment_code_regex_slash, '', line)
+                        line = re.sub(comment_code_regex_dash, '', line)
 
                         cleaned_script_text += line
 
-                    self.prepared_script_dict[original_script] = prepared_script_text
-                    self.cleaned_script_dict[original_script] = cleaned_script_text
+                    self.prepared_script_dict[original_script_no_path] = prepared_script_text
+                    self.cleaned_script_dict[original_script_no_path] = cleaned_script_text
 
-                if not self.is_debug_mode:
+                if not self.is_debug_mode and script_conn is not None:
                     print("Running statements for " + current_script)
 
                     # Run script
@@ -71,8 +80,8 @@ class SnowflakeDcr:
                 else:
                     print("Debug mode: Script generated but not run for " + current_script)
 
-    def prepare_deployment(self, is_debug_mode, dcr_version, provider_account, provider_conn, consumer_account,
-                           consumer_conn, abbreviation, path):
+    def prepare_dcr_deployment(self, is_debug_mode, dcr_version, provider_account, provider_conn, consumer_account,
+                               consumer_conn, abbreviation, path, data_selection=None):
         """
         Prepares object to deploy 2-party DCRs
         """
@@ -80,18 +89,23 @@ class SnowflakeDcr:
         provider_account = provider_account.split(".")[0].upper()
         consumer_account = consumer_account.split(".")[0].upper()
 
-        if dcr_version == "6.0 Native App":
+        script_list = []
+        script_conn_list = []
+
+        if dcr_version == "DCR 6.0 Native App":
             if abbreviation == "":
                 abbreviation = "demo"
 
-            script_list = ["provider_init", "provider_templates",
-                           "consumer_init",
-                           "provider_enable_consumer", "provider_ml",
-                           "consumer_ml"]
+            script_list = ["provider_init.sql", "provider_templates.sql",
+                           "consumer_init.sql",
+                           "provider_enable_consumer.sql", "provider_ml.sql",
+                           "consumer_ml.sql",
+                           "consumer_request.sql"]
             script_conn_list = [provider_conn, provider_conn,
                                 consumer_conn,
                                 provider_conn, provider_conn,
-                                consumer_conn]
+                                consumer_conn,
+                                None]
 
             check_words = ["SNOWCAT2", "snowcat2", "SNOWCAT", "snowcat", "_DEMO_", "_demo_"]
             replace_words = [provider_account, provider_account, consumer_account, consumer_account,
@@ -104,48 +118,54 @@ class SnowflakeDcr:
             self.script_conn_list = script_conn_list
             self.check_words = check_words
             self.replace_words = replace_words
-        elif dcr_version == "5.5 Jinja":
+        elif dcr_version == "DCR 5.5 General Availability":
             if abbreviation == "":
                 abbreviation = "samp"
 
-            script_list = ["provider_init", "provider_templates",
-                           "consumer_init",
-                           "provider_enable_consumer"]
-            script_conn_list = [provider_conn, provider_conn,
-                                consumer_conn,
-                                provider_conn]
-
-            check_words = ["/*python",
-                           "python*/",
-                           "select dcr_samp_app.cleanroom.get_sql_jinja_js(",
-                           "select dcr_samp_provider_db.cleanroom.get_sql_jinja_js(",
-                           "dcr_samp_provider_db.cleanroom.get_sql_jinja_js(template, request_params) as valid_sql",
-                           "PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_"]
-            replace_words = ["",
-                             "",
-                             "select dcr_samp_consumer.util.get_sql_jinja_py(",
-                             "select dcr_samp_provider_db.templates.get_sql_jinja_py(",
-                             "dcr_samp_provider_db.templates.get_sql_jinja_py(template, request_params) as valid_sql",
-                             provider_account, provider_account, consumer_account, consumer_account,
-                             "_" + abbreviation +
-                             "_", "_" + abbreviation + "_", ""]
-
-            self.is_debug_mode = is_debug_mode
-            self.path = path
-            self.script_list = script_list
-            self.script_conn_list = script_conn_list
-            self.check_words = check_words
-            self.replace_words = replace_words
-        elif dcr_version == "5.5 SQL Param":
-            if abbreviation == "":
-                abbreviation = "samp"
-
-            script_list = ["provider_init", "provider_templates",
-                           "consumer_init",
-                           "provider_enable_consumer"]
-            script_conn_list = [provider_conn, provider_conn,
-                                consumer_conn,
-                                provider_conn]
+            # Determine scripts by data selection
+            if data_selection == "Media & Advertising":
+                use_case_directory = "media-and-advertising"
+                script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
+                               use_case_directory + "/provider_templates.sql",
+                               "consumer_init.sql", use_case_directory + "/consumer_data.sql",
+                               "provider_enable_consumer.sql",
+                               use_case_directory + "/consumer_request.sql"]
+                script_conn_list = [provider_conn, provider_conn,
+                                    provider_conn,
+                                    consumer_conn, consumer_conn,
+                                    provider_conn,
+                                    None]
+            elif data_selection == "Supply Chain":
+                use_case_directory = "supply-chain"
+                script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
+                               use_case_directory + "/provider_templates.sql",
+                               "consumer_init.sql", use_case_directory + "/consumer_data.sql",
+                               "provider_enable_consumer.sql",
+                               use_case_directory + "/consumer_request.sql"]
+                script_conn_list = [provider_conn, provider_conn,
+                                    provider_conn,
+                                    consumer_conn, consumer_conn,
+                                    provider_conn,
+                                    None]
+            elif data_selection == "Financial Services":
+                use_case_directory = "financial-services"
+                script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
+                               use_case_directory + "/provider_templates.sql",
+                               "consumer_init.sql", use_case_directory + "/consumer_data.sql",
+                               "provider_enable_consumer.sql",
+                               use_case_directory + "/consumer_request.sql"]
+                script_conn_list = [provider_conn, provider_conn,
+                                    provider_conn,
+                                    consumer_conn, consumer_conn,
+                                    provider_conn,
+                                    None]
+            else:
+                script_list = ["provider_init.sql",
+                               "consumer_init.sql",
+                               "provider_enable_consumer.sql"]
+                script_conn_list = [provider_conn,
+                                    consumer_conn,
+                                    provider_conn]
 
             check_words = ["PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_"]
             replace_words = [provider_account, provider_account, consumer_account, consumer_account,
@@ -158,12 +178,49 @@ class SnowflakeDcr:
             self.script_conn_list = script_conn_list
             self.check_words = check_words
             self.replace_words = replace_words
-        elif dcr_version == "ID Resolution Native App":
-            # TODO - Automate ID Resolution
-            var = None
+
+    def prepare_id_res_deployment(self, is_debug_mode, id_res_version, account, account_conn, account_type,
+                                  options, path):
+        """
+        Prepares object to deploy ID Resolution Native App
+        """
+        # prepare accounts
+        account = account.split(".")[0].upper()
+
+        if id_res_version == "ID Resolution Native App":
+            script_list = []
+            script_conn_list = []
+
+            if account_type == "Provider":
+                path = path + "provider/app/"
+            else:
+                path = path + "consumer/app/"
+
+            for file in glob.iglob(path + "*"):
+                script_list.append(os.path.basename(file))
+                script_conn_list.append(account_conn)
+
+            # List of connections does not need sorted, since they are all the same value
+            script_list.sort()
+
+            check_words = []
+            replace_words = []
+
+            for key, value in options.items():
+                check_words.append("&" + key)
+                replace_words.append(value.upper())
+                check_words.append("&" + key.upper())
+                replace_words.append(value.upper())
+
+            self.is_debug_mode = is_debug_mode
+            self.path = path
+            self.script_list = script_list
+            self.script_conn_list = script_conn_list
+            self.check_words = check_words
+            self.replace_words = replace_words
 
     def prepare_consumer_addition(self, is_debug_mode, dcr_version, provider_account, provider_conn, consumer_account,
-                                  consumer_conn, abbreviation, path):
+                                  consumer_conn, abbreviation, path, data_selection=None):
         """
         Prepares object to add consumers to existing DCRs
         """
@@ -171,18 +228,20 @@ class SnowflakeDcr:
         provider_account = provider_account.split(".")[0].upper()
         consumer_account = consumer_account.split(".")[0].upper()
 
-        if dcr_version == "6.0 Native App":
+        if dcr_version == "DCR 6.0 Native App":
             if abbreviation == "":
                 abbreviation = "demo"
 
-            script_list = ["provider_init_new_consumer",
-                           "consumer_init",
-                           "provider_enable_consumer", "provider_ml",
-                           "consumer_ml"]
+            script_list = ["provider_init_new_consumer.sql",
+                           "consumer_init.sql",
+                           "provider_enable_consumer.sql", "provider_ml.sql",
+                           "consumer_ml.sql",
+                           "consumer_request.sql"]
             script_conn_list = [provider_conn,
                                 consumer_conn,
                                 provider_conn, provider_conn,
-                                consumer_conn]
+                                consumer_conn,
+                                None]
 
             check_words = ["SNOWCAT4", "snowcat4", "SNOWCAT2", "snowcat2", "SNOWCAT", "snowcat", "_DEMO_", "_demo_"]
             replace_words = [consumer_account, consumer_account, provider_account, provider_account, consumer_account,
@@ -194,48 +253,18 @@ class SnowflakeDcr:
             self.script_conn_list = script_conn_list
             self.check_words = check_words
             self.replace_words = replace_words
-        elif dcr_version == "5.5 Jinja":
+        elif dcr_version == "DCR 5.5 General Availability":
             if abbreviation == "":
                 abbreviation = "samp"
 
-            script_list = ["provider_templates", "provider_add_consumer_to_share",
-                           "consumer_init",
-                           "provider_enable_consumer"]
+            script_list = ["provider_templates.sql", "provider_add_consumer_to_share.sql",
+                           "consumer_init.sql",
+                           "provider_enable_consumer.sql",
+                           "consumer_request.sql"]
             script_conn_list = [provider_conn, provider_conn,
                                 consumer_conn,
-                                provider_conn]
-
-            check_words = ["/*python",
-                           "python*/",
-                           "select dcr_samp_app.cleanroom.get_sql_jinja_js(",
-                           "select dcr_samp_provider_db.cleanroom.get_sql_jinja_js(",
-                           "dcr_samp_provider_db.cleanroom.get_sql_jinja_js(template, request_params) as valid_sql",
-                           "PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_"]
-            replace_words = ["",
-                             "",
-                             "select dcr_samp_consumer.util.get_sql_jinja_py(",
-                             "select dcr_samp_provider_db.templates.get_sql_jinja_py(",
-                             "dcr_samp_provider_db.templates.get_sql_jinja_py(template, request_params) as valid_sql",
-                             provider_account, provider_account, consumer_account, consumer_account,
-                             "_" + abbreviation +
-                             "_", "_" + abbreviation + "_", ""]
-
-            self.is_debug_mode = is_debug_mode
-            self.path = path
-            self.script_list = script_list
-            self.script_conn_list = script_conn_list
-            self.check_words = check_words
-            self.replace_words = replace_words
-        elif dcr_version == "5.5 SQL Param":
-            if abbreviation == "":
-                abbreviation = "samp"
-
-            script_list = ["provider_templates", "provider_add_consumer_to_share",
-                           "consumer_init",
-                           "provider_enable_consumer"]
-            script_conn_list = [provider_conn, provider_conn,
-                                consumer_conn,
-                                provider_conn]
+                                provider_conn,
+                                None]
 
             check_words = ["PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_"]
             replace_words = [provider_account, provider_account, consumer_account, consumer_account,
@@ -250,7 +279,7 @@ class SnowflakeDcr:
             self.replace_words = replace_words
 
     def prepare_provider_addition(self, is_debug_mode, dcr_version, provider_account, provider_conn, consumer_account,
-                                  consumer_conn, abbreviation, app_suffix, path):
+                                  consumer_conn, abbreviation, app_suffix, path, data_selection=None):
         """
         Prepares object to add providers to existing DCRs
         """
@@ -258,83 +287,21 @@ class SnowflakeDcr:
         provider_account = provider_account.split(".")[0].upper()
         consumer_account = consumer_account.split(".")[0].upper()
 
-        if dcr_version == "6.0 Native App":
-            if abbreviation == "":
-                abbreviation = "demo"
-            if app_suffix == "":
-                app_suffix = "two"
-
-            script_list = ["provider_init", "provider_templates",
-                           "consumer_init_new_provider",
-                           "provider_enable_consumer", "provider_ml",
-                           "consumer_ml"]
-            script_conn_list = [provider_conn, provider_conn,
-                                consumer_conn,
-                                provider_conn, provider_conn,
-                                consumer_conn]
-
-            check_words = ["dcr_demo_app_two", "DCR_DEMO_APP_TWO", "SNOWCAT3", "snowcat3", "SNOWCAT2", "snowcat2",
-                           "SNOWCAT", "snowcat", "_DEMO_", "_demo_"]
-            replace_words = ["dcr_demo_app_" + app_suffix, "dcr_demo_app_" + app_suffix, provider_account,
-                             provider_account,
-                             provider_account, provider_account, consumer_account, consumer_account,
-                             "_" + abbreviation +
-                             "_", "_" + abbreviation + "_"]
-
-            self.is_debug_mode = is_debug_mode
-            self.path = path
-            self.script_list = script_list
-            self.script_conn_list = script_conn_list
-            self.check_words = check_words
-            self.replace_words = replace_words
-        elif dcr_version == "5.5 Jinja":
+        # if dcr_version == "DCR 6.0 Native App": TODO - Add later
+        if dcr_version == "DCR 5.5 General Availability":
             if abbreviation == "":
                 abbreviation = "samp"
             if app_suffix == "":
                 app_suffix = "two"
 
-            script_list = ["provider_init", "provider_templates",
-                           "consumer_init_new_provider",
-                           "provider_enable_consumer"]
+            script_list = ["provider_init.sql", "provider_templates.sql",
+                           "consumer_init_new_provider.sql",
+                           "provider_enable_consumer.sql",
+                           "consumer_request.sql"]
             script_conn_list = [provider_conn, provider_conn,
                                 consumer_conn,
-                                provider_conn]
-
-            check_words = ["/*python",
-                           "python*/",
-                           "dcr_samp_app_two", "DCR_SAMP_APP_TWO",
-                           "select dcr_samp_app.cleanroom.get_sql_jinja_js(",
-                           "select dcr_samp_provider_db.cleanroom.get_sql_jinja_js(",
-                           "dcr_samp_provider_db.cleanroom.get_sql_jinja_js(template, request_params) as valid_sql",
-                           "PROVIDER2_ACCT", "provider2_acct", "PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT",
-                           "consumer_acct", "_SAMP_", "_samp_"]
-            replace_words = ["",
-                             "",
-                             "dcr_samp_app_" + app_suffix, "dcr_samp_app_" + app_suffix,
-                             "select dcr_samp_consumer.util.get_sql_jinja_py(",
-                             "select dcr_samp_provider_db.templates.get_sql_jinja_py(",
-                             "dcr_samp_provider_db.templates.get_sql_jinja_py(template, request_params) as valid_sql",
-                             provider_account, provider_account, provider_account, provider_account, consumer_account,
-                             consumer_account, "_" + abbreviation + "_", "_" + abbreviation + "_", ""]
-
-            self.is_debug_mode = is_debug_mode
-            self.path = path
-            self.script_list = script_list
-            self.script_conn_list = script_conn_list
-            self.check_words = check_words
-            self.replace_words = replace_words
-        elif dcr_version == "5.5 SQL Param":
-            if abbreviation == "":
-                abbreviation = "samp"
-            if app_suffix == "":
-                app_suffix = "two"
-
-            script_list = ["provider_init", "provider_templates",
-                           "consumer_init_new_provider",
-                           "provider_enable_consumer"]
-            script_conn_list = [provider_conn, provider_conn,
-                                consumer_conn,
-                                provider_conn]
+                                provider_conn,
+                                None]
 
             check_words = ["dcr_samp_app_two", "DCR_SAMP_APP_TWO", "PROVIDER2_ACCT", "provider2_acct",
                            "PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_"]
@@ -366,14 +333,16 @@ class SnowflakeDcr:
         if old_abbreviation == "":
             old_abbreviation = "samp"
 
-        script_list = ["provider_init", "provider_upgrade",
-                       "consumer_init",
-                       "provider_enable_consumer", "provider_ml",
-                       "consumer_ml"]
+        script_list = ["provider_init.sql", "provider_upgrade.sql",
+                       "consumer_init.sql",
+                       "provider_enable_consumer.sql", "provider_ml.sql",
+                       "consumer_ml.sql"
+                       "consumer_request.sql"]
         script_conn_list = [provider_conn, provider_conn,
                             consumer_conn,
                             provider_conn, provider_conn,
-                            consumer_conn]
+                            consumer_conn,
+                            None]
 
         check_words = ["SNOWCAT2", "snowcat2", "SNOWCAT", "snowcat", "_DEMO_", "_demo_", "_SAMP_", "_samp_"]
         replace_words = [provider_account, provider_account, consumer_account, consumer_account,
@@ -397,7 +366,7 @@ class SnowflakeDcr:
         account = account.split(".")[0].upper()
         consumer_account = consumer_account.split(".")[0].upper()
 
-        if dcr_version == "6.0 Native App":
+        if dcr_version == "DCR 6.0 Native App":
             if abbreviation == "":
                 abbreviation = "demo"
 
@@ -406,10 +375,10 @@ class SnowflakeDcr:
                              "_" + abbreviation + "_"]
 
             if account_type == "Provider":
-                script_list = ["provider_uninstall"]
+                script_list = ["provider_uninstall.sql"]
                 script_conn_list = [account_conn]
             elif account_type == "Consumer":
-                script_list = ["consumer_uninstall"]
+                script_list = ["consumer_uninstall.sql"]
                 script_conn_list = [account_conn]
                 # Support for multi-provider
                 if app_suffix != "":
@@ -427,15 +396,15 @@ class SnowflakeDcr:
             self.script_conn_list = script_conn_list
             self.check_words = check_words
             self.replace_words = replace_words
-        elif dcr_version == "5.5 Jinja" or dcr_version == "5.5 SQL Param":
+        elif dcr_version == "DCR 5.5 General Availability":
             if abbreviation == "":
                 abbreviation = "samp"
 
             if account_type == "Provider":
-                script_list = ["provider_uninstall"]
+                script_list = ["provider_uninstall.sql"]
                 script_conn_list = [account_conn]
             elif account_type == "Consumer":
-                script_list = ["consumer_uninstall"]
+                script_list = ["consumer_uninstall.sql"]
                 script_conn_list = [account_conn]
             else:
                 script_list = []

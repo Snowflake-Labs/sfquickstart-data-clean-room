@@ -25,9 +25,24 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-08-05          B. Klein                            Uncommented get_sql_jinja to facilitate DCR Assistant
 2022-08-23          M. Rainey                           Remove differential privacy
 2022-08-30          D. Cole, B. Klein                   Added new javascript jinja template engine
+2022-10-25          B. Klein                            Separated framework code and demo data
+2022-11-08          B. Klein                            Python GA
 *************************************************************************************************************/
 
 use role accountadmin;
+
+create role if not exists data_clean_room_role;
+
+// may need to drop and re-add warehouse if already created by accountadmin
+//drop warehouse app_wh;
+
+grant create share on account to role data_clean_room_role;
+grant import share on account to role data_clean_room_role;
+grant create database on account to role data_clean_room_role;
+grant create warehouse on account to role data_clean_room_role;
+grant role data_clean_room_role to role sysadmin;
+use role data_clean_room_role;
+
 create warehouse if not exists app_wh;
 
 //cleanup//
@@ -38,18 +53,15 @@ drop share if exists dcr_samp_requests;
 ///////
 
 create or replace database dcr_samp_consumer;
-create or replace schema dcr_samp_consumer.mydata;
 create or replace schema dcr_samp_consumer.util;
 
-// Python jinja function - actually uses the Jinja engine, but requries Python UDFs
-// The function is not used unless swapped in the requests() and process_requests() procedures
-/*python
-create or replace function dcr_samp_consumer.util.get_sql_jinja_py(template string, parameters variant)
+// Python jinja function
+create or replace function dcr_samp_consumer.util.get_sql_jinja(template string, parameters variant)
   returns string
   language python
   runtime_version = 3.8
   handler='apply_sql_template'
-  packages = ('six','jinja2')
+  packages = ('six','jinja2==3.0.3','markupsafe')
 as
 $$
 # Most of the following code is copied from the jinjasql package, which is not included in Snowflake's python packages
@@ -63,7 +75,7 @@ from jinja2 import Environment
 from jinja2 import Template
 from jinja2.ext import Extension
 from jinja2.lexer import Token
-from jinja2.utils import Markup
+from markupsafe import Markup
 
 try:
     from collections import OrderedDict
@@ -112,12 +124,9 @@ class SqlExtension(Extension):
         {{ some.variable | filter1 | filter 2}}
             to
         {{ ( some.variable | filter1 | filter 2 ) | bind}}
-
         ... for all variable declarations in the template
-
         Note the extra ( and ). We want the | bind to apply to the entire value, not just the last value.
         The parentheses are mostly redundant, except in expressions like {{ '%' ~ myval ~ '%' }}
-
         This function is called by jinja2 immediately
         after the lexing stage, but before the parser is called.
         """
@@ -159,7 +168,6 @@ def sql_safe(value):
 def bind(value, name):
     """A filter that prints %s, and stores the value
     in an array, so that it can be bound using a prepared statement
-
     This filter is automatically applied to every {{variable}}
     during the lexing stage, so developers can't forget to bind
     """
@@ -224,7 +232,6 @@ class JinjaSql(object):
     def _prepare_environment(self):
         self.env.autoescape=True
         self.env.add_extension(SqlExtension)
-        self.env.add_extension('jinja2.ext.autoescape')
         self.env.filters["bind"] = bind
         self.env.filters["sqlsafe"] = sql_safe
         self.env.filters["inclause"] = bind_in_clause
@@ -293,30 +300,6 @@ def apply_sql_template(template, parameters):
     return strip_blank_lines(get_sql_from_template(query, bind_params))
 
 $$;
-python*/
-
-
-
-// create sample customers with other features (~33% of these should join to the providers emails due to the uniform(1, 3, random()) in the email addresses)
-
-create or replace table dcr_samp_consumer.mydata.customers as
-select 'user'||seq4()||'_'||uniform(1, 3, random())||'@email.com' as email,
- replace(to_varchar(seq4() % 999, '000') ||'-'||to_varchar(seq4() % 888, '000')||'-'||to_varchar(seq4() % 777, '000')||uniform(1, 10, random()),' ','') as phone,
-  case when uniform(1,10,random())<2 then 'CAT'
-       when uniform(1,10,random())>=2 then 'DOG'
-       when uniform(1,10,random())>=1 then 'BIRD'
-else 'NO_PETS' end as pets,
-  round(20000+uniform(0,65000,random()),-2) as zip
-  from table(generator(rowcount => 1000000));
-
-create or replace table dcr_samp_consumer.mydata.conversions as
-    select email, 'product_'||uniform(1,5,random()) as product,
-    ('2021-'||uniform(3,5,random())||'-'||uniform(1,30,random()))::date as sls_date,
-    uniform(1,100,random())+uniform(1,100,random())/100 as sales_dlr
-    from dcr_samp_consumer.mydata.customers sample (10);
-
-//select * from dcr_samp_consumer.mydata.customers;
-//select * from dcr_samp_consumer.mydata.conversions;
 
 
 //Additonal steps for V5.5
@@ -331,17 +314,8 @@ create table dcr_samp_consumer.util.instance as select randstr(64,random()) as i
 // mount clean room app
 create or replace database dcr_samp_app from share PROVIDER_ACCT.dcr_samp_app;
 
-// mount out-of-app-band firewall-protected provider data
-// create or replace database dcr_samp_data from share PROVIDER_ACCT.dcr_samp_data;
-
 // see templates from provider
 select * from dcr_samp_app.cleanroom.templates;
-
-// verify this simple query can NOT see providers data
-select * from dcr_samp_app.cleanroom.provider_data;
-// returns no rows but can see column names
-
-
 
 
 ///////
@@ -361,9 +335,6 @@ alter share dcr_samp_requests add accounts = PROVIDER_ACCT;
 
 // test share from app, see app instance unique id - provider1
 //select * from dcr_samp_app.cleanroom.instance;
-
-// see the templates - provider1
-select * from dcr_samp_app.cleanroom.templates;
 
 
 ///////
@@ -394,7 +365,7 @@ create or replace procedure dcr_samp_consumer.PROVIDER_ACCT_schema.request(in_te
     if (at_timestamp) {
       at_timestamp = "'"+at_timestamp+"'";
     } else {
-      at_timestamp = "CURRENT_TIMESTAMP()::string";
+      at_timestamp = "SYSDATE()::string";
     };
 
     // create the request JSON object with a SQL statements
@@ -428,7 +399,7 @@ create or replace procedure dcr_samp_consumer.PROVIDER_ACCT_schema.request(in_te
                                     right(settings::varchar,len(settings::varchar::varchar)-1)) as request_params
      from query_params, settings, request_params, app_instance_id
      ) , proposed_query as (
-             select dcr_samp_app.cleanroom.get_sql_jinja_js(
+             select dcr_samp_consumer.util.get_sql_jinja(
             (select template from dcr_samp_app.cleanroom.templates where template_name = rp.query_template), qpf.request_params) as proposed_query,
             sha2(proposed_query) as proposed_query_hash from query_params_full qpf, request_params rp)
      select rp.*, pq.*, f.request_params
@@ -457,36 +428,3 @@ create or replace procedure dcr_samp_consumer.PROVIDER_ACCT_schema.request(in_te
   return [ "Request Sent", request_id , request];
 
 $$;
-
-
-
-
-
-//create local settings table - provider1
-create or replace schema dcr_samp_consumer.local;
-create or replace table dcr_samp_consumer.local.user_settings (setting_name varchar(1000), setting_value varchar(1000));
-
-//populate the local settings table - provider1
-delete from dcr_samp_consumer.local.user_settings;
-insert into dcr_samp_consumer.local.user_settings (setting_name, setting_value)
- VALUES ('app_data','dcr_samp_app'),
-        ('app_two_data','dcr_samp_app_two'),
-        ('app_three_data','dcr_samp_app_three'),
-        ('consumer_db','dcr_samp_consumer'),
-        ('consumer_schema','mydata'),
-        ('consumer_table','customers'),
-        ('consumer_join_field','email'),
-        ('app_instance','dcr_samp_app'),
-        ('app_two_instance','dcr_samp_app_two'),
-        ('app_three_instance','dcr_samp_app_three'),
-        ('consumer_email_field','email'),
-        ('consumer_phone_field','phone'),
-        ('consumer_customer_table','customers'),
-        ('consumer_conversions_table','conversions'),
-        ('consumer_requests_table','dcr_samp_consumer.PROVIDER_ACCT_schema.requests'),
-        ('consumer_internal_join_field','email')
-        ;
-
-
-
-// ----> ON FIRST SETUP, NOW GO TO PROVIDER_ACCT SIDE AND ENABLE THIS CONSUMER_ACCT -- REQUEST HANDLING STREAM AND TASK

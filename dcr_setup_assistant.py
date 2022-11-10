@@ -22,21 +22,75 @@ col2.image("assets/snowflake_dcr_multi.png", width=120)
 st.sidebar.image("assets/bear_snowflake_hello.png")
 action = st.sidebar.radio("What action would you like to take?", ("Initial Deployment 🐻‍❄", "Add Add'l Consumer 🐧️",
                                                                   "Add Add'l Provider ☃️", "Uninstall 💧"))
-st.text("Generates scripts for managing version 5.5 Data Clean Rooms")
-st.text("This sample code is provided for reference purposes only. Please note that this code is provided “AS IS” and "
-        "without warranty.")
-st.text("Snowflake will not offer any support for use of the sample code.")
+
+st.markdown("Generates scripts for managing version 5.5 Data Clean Rooms.")
+st.markdown("This sample code is provided for reference purposes only. Please note that this code is provided “AS IS” "
+            "and without warranty.")
+st.markdown("Snowflake will not offer any support for use of the sample code.")
+
+dcr_data_options = ['Media & Advertising', 'None']
 
 # Create dcr object
 data_clean_room = dcr.SnowflakeDcr()
 zip_buffer = io.BytesIO()
 
+
+# Gets version info
+def get_version_info(repo_path):
+    version_file = repo_path + "VERSION.md"
+    version_list = []
+    # Read version file
+    try:
+        with open(version_file, "r", encoding='utf-8') as fin:
+            for line in fin:
+                version_list.append(line)
+    finally:
+        return version_list
+
+
+# Used to load the zip file buffer in-memory
+def load_zip_buffer(snowflake_dcr, buffer, do_include_comments):
+    # Add script number to help sort and show the correct order
+    script_number = 1
+    if do_include_comments:
+        with ZipFile(buffer, "w") as archive:
+            for script in snowflake_dcr.prepared_script_dict.keys():
+                # Remove path
+                script_name = script.lstrip("/")
+
+                # Add number
+                script_name = str(script_number) + " - " + script_name
+                script_number += 1
+
+                archive.writestr(script_name, snowflake_dcr.prepared_script_dict[script])
+    else:
+        with ZipFile(buffer, "w") as archive:
+            for script in snowflake_dcr.cleaned_script_dict.keys():
+                # Remove path
+                script_name = script.lstrip("/")
+
+                # Add number
+                script_name = str(script_number) + " - " + script_name
+                script_number += 1
+
+                # write to archive
+                archive.writestr(script_name, snowflake_dcr.cleaned_script_dict[script])
+
+
+path = os.getcwd() + "/data-clean-room/"
+
+with st.expander("Version Information"):
+    for record in get_version_info(path):
+        st.write(record)
+
+
 # Build form based on selected action
 if action == "Initial Deployment 🐻‍❄":
     # Form for initial deployment
     st.subheader("❄️ Initial DCR Deployment! ❄️")
+
     with st.form("initial_deployment_form"):
-        dcr_version = "5.5 SQL Param"
+        dcr_version = "DCR 5.5 General Availability"
         abbreviation = st.text_input("What database abbreviation would you like? (Leave blank for default)")
         provider_account = st.text_input(label="What is the Provider's account identifier?",
                                          help="This should be just the account locator.  Anything beyond a '.' will be "
@@ -44,6 +98,7 @@ if action == "Initial Deployment 🐻‍❄":
         consumer_account = st.text_input(label="What is the Consumer's account identifier?",
                                          help="This should be just the account locator.  Anything beyond a '.' will be "
                                               "removed automatically.")
+        dcr_data_selection = st.selectbox("Would you like to load demo data?", dcr_data_options)
         include_comments = st.checkbox("Include comments in scripts", True)
 
         submitted = st.form_submit_button("Run")
@@ -52,26 +107,17 @@ if action == "Initial Deployment 🐻‍❄":
             if provider_account == consumer_account:
                 st.error("Provider and consumer cannot be the same account!")
             else:
-                path = os.getcwd() + "/data-clean-room/"
-
                 with st.spinner("Generating Clean Room Scripts..."):
-                    data_clean_room.prepare_deployment(True, dcr_version, provider_account, None,
-                                                       consumer_account, None, abbreviation, path)
+                    data_clean_room.prepare_dcr_deployment(True, dcr_version, provider_account, None, consumer_account, None, abbreviation, path, dcr_data_selection)
                     data_clean_room.execute()
 
                 # Message dependent on debug or not
                 st.success("Scripts Ready for Download!")
 
                 # Populate zip buffer for download buttons
-                if include_comments:
-                    with ZipFile(zip_buffer, "w") as archive:
-                        for script in data_clean_room.prepared_script_dict.keys():
-                            archive.writestr(script, data_clean_room.prepared_script_dict[script])
-                else:
-                    with ZipFile(zip_buffer, "w") as archive:
-                        for script in data_clean_room.cleaned_script_dict.keys():
-                            archive.writestr(script, data_clean_room.cleaned_script_dict[script])
+                load_zip_buffer(data_clean_room, zip_buffer, include_comments)
                 st.snow()
+
 elif action == "Add Add'l Consumer 🐧️":
     # Form for adding consumers
     st.subheader("❄️ Add Consumers to Existing DCRs! ❄️")
@@ -103,14 +149,7 @@ elif action == "Add Add'l Consumer 🐧️":
                 st.success("Scripts Ready for Download!")
 
                 # Populate zip buffer for download buttons
-                if include_comments:
-                    with ZipFile(zip_buffer, "w") as archive:
-                        for script in data_clean_room.prepared_script_dict.keys():
-                            archive.writestr(script, data_clean_room.prepared_script_dict[script])
-                else:
-                    with ZipFile(zip_buffer, "w") as archive:
-                        for script in data_clean_room.cleaned_script_dict.keys():
-                            archive.writestr(script, data_clean_room.cleaned_script_dict[script])
+                load_zip_buffer(data_clean_room, zip_buffer, include_comments)
                 st.snow()
 
 elif action == "Add Add'l Provider ☃️":
@@ -146,14 +185,7 @@ elif action == "Add Add'l Provider ☃️":
                 st.success("Scripts Ready for Download!")
 
                 # Populate zip buffer for download buttons
-                if include_comments:
-                    with ZipFile(zip_buffer, "w") as archive:
-                        for script in data_clean_room.prepared_script_dict.keys():
-                            archive.writestr(script, data_clean_room.prepared_script_dict[script])
-                else:
-                    with ZipFile(zip_buffer, "w") as archive:
-                        for script in data_clean_room.cleaned_script_dict.keys():
-                            archive.writestr(script, data_clean_room.cleaned_script_dict[script])
+                load_zip_buffer(data_clean_room, zip_buffer, include_comments)
                 st.snow()
 
 elif action == "Uninstall 💧":
@@ -194,14 +226,7 @@ elif action == "Uninstall 💧":
                 st.success("Scripts Ready for Download!")
 
                 # Populate zip buffer for download buttons
-                if include_comments:
-                    with ZipFile(zip_buffer, "w") as archive:
-                        for script in data_clean_room.prepared_script_dict.keys():
-                            archive.writestr(script, data_clean_room.prepared_script_dict[script])
-                else:
-                    with ZipFile(zip_buffer, "w") as archive:
-                        for script in data_clean_room.cleaned_script_dict.keys():
-                            archive.writestr(script, data_clean_room.cleaned_script_dict[script])
+                load_zip_buffer(data_clean_room, zip_buffer, include_comments)
                 st.snow()
 
 st.write("Once successfully run, please download your scripts!")

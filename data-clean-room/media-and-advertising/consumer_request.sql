@@ -18,7 +18,7 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-08-23          M. Rainey                           Remove differential privacy
 *************************************************************************************************************/
 
-use role accountadmin;
+use role data_clean_room_role;
 use warehouse app_wh;
 
 ///////
@@ -31,7 +31,7 @@ use warehouse app_wh;
 // -> Now, reset provider side, otherwise provider will block requests if there is a previous request from an older app instance ID
 
 // see schema
-select * from dcr_samp_app.cleanroom.provider_data;
+select * from dcr_samp_app.cleanroom.provider_customers_vw;
 
 // see the templates
 select * from dcr_samp_app.cleanroom.templates;
@@ -100,7 +100,8 @@ select * from dcr_samp_app.cleanroom.templates;
 select * from dcr_samp_app_two.cleanroom.templates;
 select * from dcr_samp_app_three.cleanroom.templates;
 
-set ts = current_timestamp();
+// NOTE - the tiemstamp parameter must be in UTC to enable timezone compatibility across accounts
+set ts = SYSDATE();
 
 // clean room app creates and signs the request
 call dcr_samp_consumer.PROVIDER1_schema.request('customer_overlap_multiparty_subscribers',
