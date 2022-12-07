@@ -125,47 +125,31 @@ class SnowflakeDcr:
             # Determine scripts by data selection
             if data_selection == "Media & Advertising":
                 use_case_directory = "media-and-advertising"
-                script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
-                               use_case_directory + "/provider_templates.sql",
-                               "consumer_init.sql", use_case_directory + "/consumer_data.sql",
-                               "provider_enable_consumer.sql",
-                               use_case_directory + "/consumer_request.sql"]
-                script_conn_list = [provider_conn, provider_conn,
-                                    provider_conn,
-                                    consumer_conn, consumer_conn,
-                                    provider_conn,
-                                    None]
             elif data_selection == "Supply Chain":
                 use_case_directory = "supply-chain"
-                script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
-                               use_case_directory + "/provider_templates.sql",
-                               "consumer_init.sql", use_case_directory + "/consumer_data.sql",
-                               "provider_enable_consumer.sql",
-                               use_case_directory + "/consumer_request.sql"]
-                script_conn_list = [provider_conn, provider_conn,
-                                    provider_conn,
-                                    consumer_conn, consumer_conn,
-                                    provider_conn,
-                                    None]
             elif data_selection == "Financial Services":
                 use_case_directory = "financial-services"
-                script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
-                               use_case_directory + "/provider_templates.sql",
-                               "consumer_init.sql", use_case_directory + "/consumer_data.sql",
-                               "provider_enable_consumer.sql",
-                               use_case_directory + "/consumer_request.sql"]
-                script_conn_list = [provider_conn, provider_conn,
-                                    provider_conn,
-                                    consumer_conn, consumer_conn,
-                                    provider_conn,
-                                    None]
             else:
+                use_case_directory = None
+
+            if use_case_directory is None:
                 script_list = ["provider_init.sql",
                                "consumer_init.sql",
                                "provider_enable_consumer.sql"]
                 script_conn_list = [provider_conn,
                                     consumer_conn,
                                     provider_conn]
+            else:
+                script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
+                               use_case_directory + "/provider_templates.sql",
+                               "consumer_init.sql", use_case_directory + "/consumer_data.sql",
+                               "provider_enable_consumer.sql",
+                               use_case_directory + "/consumer_request.sql"]
+                script_conn_list = [provider_conn, provider_conn,
+                                    provider_conn,
+                                    consumer_conn, consumer_conn,
+                                    provider_conn,
+                                    None]
 
             check_words = ["PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_"]
             replace_words = [provider_account, provider_account, consumer_account, consumer_account,
@@ -257,14 +241,32 @@ class SnowflakeDcr:
             if abbreviation == "":
                 abbreviation = "samp"
 
-            script_list = ["provider_templates.sql", "provider_add_consumer_to_share.sql",
-                           "consumer_init.sql",
-                           "provider_enable_consumer.sql",
-                           "consumer_request.sql"]
-            script_conn_list = [provider_conn, provider_conn,
-                                consumer_conn,
-                                provider_conn,
-                                None]
+            # Determine scripts by data selection
+            if data_selection == "Media & Advertising":
+                use_case_directory = "media-and-advertising"
+            elif data_selection == "Supply Chain":
+                use_case_directory = "supply-chain"
+            elif data_selection == "Financial Services":
+                use_case_directory = "financial-services"
+            else:
+                use_case_directory = None
+
+            if use_case_directory is None:
+                script_list = ["provider_add_consumer_to_share.sql",
+                               "consumer_init.sql",
+                               "provider_enable_consumer.sql"]
+                script_conn_list = [provider_conn,
+                                    consumer_conn,
+                                    provider_conn]
+            else:
+                script_list = [use_case_directory + "/provider_templates.sql", "provider_add_consumer_to_share.sql",
+                               "consumer_init.sql", use_case_directory + "/consumer_data.sql",
+                               "provider_enable_consumer.sql",
+                               use_case_directory + "/consumer_request.sql"]
+                script_conn_list = [provider_conn, provider_conn,
+                                    consumer_conn, consumer_conn,
+                                    provider_conn,
+                                    None]
 
             check_words = ["PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_"]
             replace_words = [provider_account, provider_account, consumer_account, consumer_account,
@@ -294,14 +296,34 @@ class SnowflakeDcr:
             if app_suffix == "":
                 app_suffix = "two"
 
-            script_list = ["provider_init.sql", "provider_templates.sql",
-                           "consumer_init_new_provider.sql",
-                           "provider_enable_consumer.sql",
-                           "consumer_request.sql"]
-            script_conn_list = [provider_conn, provider_conn,
-                                consumer_conn,
-                                provider_conn,
-                                None]
+            # Determine scripts by data selection
+            if data_selection == "Media & Advertising":
+                use_case_directory = "media-and-advertising"
+            elif data_selection == "Supply Chain":
+                use_case_directory = "supply-chain"
+            elif data_selection == "Financial Services":
+                use_case_directory = "financial-services"
+            else:
+                use_case_directory = None
+
+            if use_case_directory is None:
+                script_list = ["provider_init.sql",
+                               "consumer_init_new_provider.sql",
+                               "provider_enable_consumer.sql"]
+                script_conn_list = [provider_conn, provider_conn,
+                                    consumer_conn,
+                                    provider_conn]
+            else:
+                script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
+                               use_case_directory + "/provider_templates.sql",
+                               "consumer_init_new_provider.sql",
+                               "provider_enable_consumer.sql",
+                               use_case_directory + "/consumer_request.sql"]
+                script_conn_list = [provider_conn, provider_conn,
+                                    provider_conn,
+                                    consumer_conn, consumer_conn,
+                                    provider_conn,
+                                    None]
 
             check_words = ["dcr_samp_app_two", "DCR_SAMP_APP_TWO", "PROVIDER2_ACCT", "provider2_acct",
                            "PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_"]

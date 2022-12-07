@@ -108,7 +108,8 @@ if action == "Initial Deployment 🐻‍❄":
                 st.error("Provider and consumer cannot be the same account!")
             else:
                 with st.spinner("Generating Clean Room Scripts..."):
-                    data_clean_room.prepare_dcr_deployment(True, dcr_version, provider_account, None, consumer_account, None, abbreviation, path, dcr_data_selection)
+                    data_clean_room.prepare_dcr_deployment(True, dcr_version, provider_account, None, consumer_account,
+                                                           None, abbreviation, path, dcr_data_selection)
                     data_clean_room.execute()
 
                 # Message dependent on debug or not
@@ -122,7 +123,7 @@ elif action == "Add Add'l Consumer 🐧️":
     # Form for adding consumers
     st.subheader("❄️ Add Consumers to Existing DCRs! ❄️")
     with st.form("additional_consumer_form"):
-        dcr_version = "5.5 SQL Param"
+        dcr_version = "DCR 5.5 General Availability"
         abbreviation = st.text_input("What database abbreviation does the Provider have? (Leave blank for default)")
         provider_account = st.text_input(label="What is the existing Provider's account identifier?",
                                          help="This should be just the account locator.  Anything beyond a '.' will be "
@@ -130,6 +131,7 @@ elif action == "Add Add'l Consumer 🐧️":
         consumer_account = st.text_input(label="What is the new Consumer's account identifier?",
                                          help="This should be just the account locator.  Anything beyond a '.' will be "
                                               "removed automatically.")
+        dcr_data_selection = st.selectbox("Would you like to load demo data?", dcr_data_options)
         include_comments = st.checkbox("Include comments in scripts", True)
 
         submitted = st.form_submit_button("Run")
@@ -143,7 +145,7 @@ elif action == "Add Add'l Consumer 🐧️":
                 with st.spinner("Generating Clean Room Scripts..."):
                     data_clean_room.prepare_consumer_addition(True, dcr_version, provider_account,
                                                               None, consumer_account, None,
-                                                              abbreviation, path)
+                                                              abbreviation, path, dcr_data_selection)
                     data_clean_room.execute()
 
                 st.success("Scripts Ready for Download!")
@@ -156,7 +158,7 @@ elif action == "Add Add'l Provider ☃️":
     # Form for adding providers
     st.subheader("❄️ Add Providers to Existing DCRs! ❄️")
     with st.form("additional_provider_form"):
-        dcr_version = "5.5 SQL Param"
+        dcr_version = "DCR 5.5 General Availability"
         abbreviation = st.text_input("What database abbreviation does the Consumer use? (Leave blank for default)")
         consumer_account = st.text_input(label="What is the existing Consumer's account identifier?",
                                          help="This should be just the account locator.  Anything beyond a '.' will be "
@@ -166,6 +168,7 @@ elif action == "Add Add'l Provider ☃️":
                                               "removed automatically.")
         app_suffix = st.text_input("What suffix would you like for the Consumer-side app name? (Leave blank for "
                                    "default)")
+        dcr_data_selection = st.selectbox("Would you like to load demo data?", dcr_data_options)
         include_comments = st.checkbox("Include comments in scripts", True)
 
         submitted = st.form_submit_button("Run")
@@ -179,7 +182,7 @@ elif action == "Add Add'l Provider ☃️":
                 with st.spinner("Generating Clean Room Scripts..."):
                     data_clean_room.prepare_provider_addition(True, dcr_version, provider_account,
                                                               None, consumer_account, None,
-                                                              abbreviation, app_suffix, path)
+                                                              abbreviation, app_suffix, path, dcr_data_selection)
                     data_clean_room.execute()
 
                 st.success("Scripts Ready for Download!")
@@ -193,7 +196,7 @@ elif action == "Uninstall 💧":
     st.subheader("❄️ Uninstall Existing DCRs! ❄️")
     st.warning("The scripts from this action **drop** related shares and databases!")
     with st.form("initial_deployment_form"):
-        dcr_version = "5.5 SQL Param"
+        dcr_version = "DCR 5.5 General Availability"
         abbreviation = st.text_input(
             "What database abbreviation would you like to uninstall? (Leave blank for default)")
         account = st.text_input(label="What is the account identifier to uninstall?",
