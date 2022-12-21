@@ -47,7 +47,7 @@ use warehouse app_wh;
 // mount request share from consumer
 // NOTE show_initial_rows is not supposed to work across a share but it does and using here for ease of debugging
 
-create or replace database dcr_samp_CONSUMER_ACCT from share CONSUMER_ACCT.dcr_samp_requests;
+create or replace database dcr_samp_CONSUMER_ACCT from share CONSUMER_ACCT.dcr_samp_requests_PROVIDER_ACCT;
 create or replace stream dcr_samp_provider_db.admin.request_stream_CONSUMER_ACCT on table dcr_samp_CONSUMER_ACCT.PROVIDER_ACCT_schema.requests append_only = true show_initial_rows = true;
 delete from dcr_samp_provider_db.admin.request_log;
 

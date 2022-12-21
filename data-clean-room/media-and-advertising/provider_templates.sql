@@ -78,7 +78,7 @@ select
     , count(distinct p.email) as overlap
 from
     {{ app_data | sqlsafe }}.cleanroom.provider_customers_vw p,
-    {{ app_data_two | sqlsafe }}.cleanroom.provider_customers_vw p2,
+    {{ app_two_data | sqlsafe }}.cleanroom.provider_customers_vw p2,
     {{ consumer_db | sqlsafe }}.{{ consumer_schema | sqlsafe }}.{{ consumer_table | sqlsafe }} at(timestamp => '{{ at_timestamp | sqlsafe }}'::timestamp_ntz) c
 where
     c.{{ consumer_join_field | sqlsafe }} = p.email

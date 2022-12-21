@@ -46,7 +46,21 @@ use role data_clean_room_role;
 create warehouse if not exists app_wh;
 
 //cleanup//
-drop share if exists dcr_samp_requests;
+show shares;
+execute immediate $$
+declare
+  res resultset default (select $3 as name from table(result_scan(last_query_id())) where $4 = 'DCR_SAMP_CONSUMER');
+  c1 cursor for res;
+  share_var string;
+begin
+  open c1;
+  for record in c1 do
+    share_var:=record.name;
+    execute immediate 'drop share if exists '|| :share_var;
+  end for;
+  return 'Shares deleted';
+end;
+$$;
 
 ///////
 // CONSUMER_ACCT LOCAL SETUP
@@ -327,11 +341,11 @@ create or replace table dcr_samp_consumer.PROVIDER_ACCT_schema.requests (request
 ALTER TABLE dcr_samp_consumer.PROVIDER_ACCT_schema.requests SET CHANGE_TRACKING = TRUE;
 
 // share the request table to the provider
-create or replace share dcr_samp_requests;
-grant usage on database dcr_samp_consumer to share dcr_samp_requests;
-grant usage on schema dcr_samp_consumer.PROVIDER_ACCT_schema to share dcr_samp_requests;
-grant select on dcr_samp_consumer.PROVIDER_ACCT_schema.requests to share dcr_samp_requests;
-alter share dcr_samp_requests add accounts = PROVIDER_ACCT;
+create or replace share dcr_samp_requests_PROVIDER_ACCT;
+grant usage on database dcr_samp_consumer to share dcr_samp_requests_PROVIDER_ACCT;
+grant usage on schema dcr_samp_consumer.PROVIDER_ACCT_schema to share dcr_samp_requests_PROVIDER_ACCT;
+grant select on dcr_samp_consumer.PROVIDER_ACCT_schema.requests to share dcr_samp_requests_PROVIDER_ACCT;
+alter share dcr_samp_requests_PROVIDER_ACCT add accounts = PROVIDER_ACCT;
 
 // test share from app, see app instance unique id - provider1
 //select * from dcr_samp_app.cleanroom.instance;

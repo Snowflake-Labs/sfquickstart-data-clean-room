@@ -31,7 +31,7 @@ create or replace database dcr_samp_app_two from share PROVIDER2_ACCT.dcr_samp_a
 select * from dcr_samp_app_two.cleanroom.templates;
 
 // verify this simple query can NOT see providers data
-select * from dcr_samp_app_two.cleanroom.provider_data;
+select * from dcr_samp_app_two.cleanroom.provider_customers_vw;
 // returns no rows but can see column names
 
 // see the templates - provider2
@@ -134,8 +134,9 @@ create or replace procedure dcr_samp_consumer.PROVIDER2_ACCT_schema.request(in_t
 
 $$;
 
-grant usage on schema dcr_samp_consumer.PROVIDER2_ACCT_schema to share dcr_samp_requests;
-grant select on dcr_samp_consumer.PROVIDER2_ACCT_schema.requests to share dcr_samp_requests;
-
-// modified for 3-party
-alter share dcr_samp_requests add accounts = PROVIDER2_ACCT;
+// share the request table to the provider
+create or replace share dcr_samp_requests_PROVIDER2_ACCT;
+grant usage on database dcr_samp_consumer to share dcr_samp_requests_PROVIDER2_ACCT;
+grant usage on schema dcr_samp_consumer.PROVIDER2_ACCT_schema to share dcr_samp_requests_PROVIDER2_ACCT;
+grant select on dcr_samp_consumer.PROVIDER2_ACCT_schema.requests to share dcr_samp_requests_PROVIDER2_ACCT;
+alter share dcr_samp_requests_PROVIDER2_ACCT add accounts = PROVIDER2_ACCT;

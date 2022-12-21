@@ -81,7 +81,7 @@ class SnowflakeDcr:
                     print("Debug mode: Script generated but not run for " + current_script)
 
     def prepare_dcr_deployment(self, is_debug_mode, dcr_version, provider_account, provider_conn, consumer_account,
-                               consumer_conn, abbreviation, path, data_selection=None):
+                               consumer_conn, abbreviation, path, data_selection=None, deployment_type=None):
         """
         Prepares object to deploy 2-party DCRs
         """
@@ -132,24 +132,47 @@ class SnowflakeDcr:
             else:
                 use_case_directory = None
 
-            if use_case_directory is None:
-                script_list = ["provider_init.sql",
-                               "consumer_init.sql",
-                               "provider_enable_consumer.sql"]
-                script_conn_list = [provider_conn,
-                                    consumer_conn,
-                                    provider_conn]
+            if deployment_type == "Provider":
+                if use_case_directory is None:
+                    script_list = ["provider_init.sql"]
+                    script_conn_list = [provider_conn]
+                else:
+                    script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
+                                   use_case_directory + "/provider_templates.sql"]
+                    script_conn_list = [provider_conn, provider_conn,
+                                        provider_conn]
+            elif deployment_type == "Consumer":
+                if use_case_directory is None:
+                    script_list = ["consumer_init.sql",
+                                   "provider_enable_consumer.sql"]
+                    script_conn_list = [consumer_conn,
+                                        provider_conn]
+                else:
+                    script_list = ["consumer_init.sql", use_case_directory + "/consumer_data.sql",
+                                   "provider_enable_consumer.sql",
+                                   use_case_directory + "/consumer_request.sql"]
+                    script_conn_list = [consumer_conn, consumer_conn,
+                                        provider_conn,
+                                        None]
             else:
-                script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
-                               use_case_directory + "/provider_templates.sql",
-                               "consumer_init.sql", use_case_directory + "/consumer_data.sql",
-                               "provider_enable_consumer.sql",
-                               use_case_directory + "/consumer_request.sql"]
-                script_conn_list = [provider_conn, provider_conn,
-                                    provider_conn,
-                                    consumer_conn, consumer_conn,
-                                    provider_conn,
-                                    None]
+                if use_case_directory is None:
+                    script_list = ["provider_init.sql",
+                                   "consumer_init.sql",
+                                   "provider_enable_consumer.sql"]
+                    script_conn_list = [provider_conn,
+                                        consumer_conn,
+                                        provider_conn]
+                else:
+                    script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
+                                   use_case_directory + "/provider_templates.sql",
+                                   "consumer_init.sql", use_case_directory + "/consumer_data.sql",
+                                   "provider_enable_consumer.sql",
+                                   use_case_directory + "/consumer_request.sql"]
+                    script_conn_list = [provider_conn, provider_conn,
+                                        provider_conn,
+                                        consumer_conn, consumer_conn,
+                                        provider_conn,
+                                        None]
 
             check_words = ["PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_"]
             replace_words = [provider_account, provider_account, consumer_account, consumer_account,
@@ -163,38 +186,77 @@ class SnowflakeDcr:
             self.check_words = check_words
             self.replace_words = replace_words
 
-    def prepare_id_res_deployment(self, is_debug_mode, id_res_version, account, account_conn, account_type,
-                                  options, path):
+    def prepare_data_onboarding(self, is_debug_mode, dcr_version, provider_account, provider_conn, abbreviation, path,
+                                source_database, source_schema, source_table, source_column):
         """
-        Prepares object to deploy ID Resolution Native App
+        Prepares deployment of custom data table/view
+        """
+        # prepare account
+        provider_account = provider_account.split(".")[0].upper()
+
+        script_list = []
+        script_conn_list = []
+
+        # if dcr_version == "DCR 6.0 Native App": TODO - Add later
+        if dcr_version == "DCR 5.5 General Availability":
+            if abbreviation == "":
+                abbreviation = "samp"
+
+            script_list = ["provider_data_onboarding.sql"]
+            script_conn_list = [provider_conn]
+
+            check_words = ["PROVIDER_ACCT", "provider_acct", "_SAMP_", "_samp_",
+                           "SOURCE_DATABASE", "source_database",
+                           "SOURCE_SCHEMA", "source_schema",
+                           "SOURCE_TABLE", "source_table",
+                           "SOURCE_COLUMN", "source_column"]
+            replace_words = [provider_account, provider_account,
+                             "_" + abbreviation +
+                             "_", "_" + abbreviation + "_",
+                             source_database, source_database,
+                             source_schema, source_schema,
+                             source_table, source_table,
+                             source_column, source_column]
+
+            self.is_debug_mode = is_debug_mode
+            self.path = path
+            self.script_list = script_list
+            self.script_conn_list = script_conn_list
+            self.check_words = check_words
+            self.replace_words = replace_words
+
+    def prepare_template_deployment(self, is_debug_mode, dcr_version, provider_account, provider_conn, consumer_account,
+                                    template_name, template_text, available_dimensions, abbreviation, path):
+        """
+        Prepares deployment of a custom template
         """
         # prepare accounts
-        account = account.split(".")[0].upper()
+        provider_account = provider_account.split(".")[0].upper()
+        consumer_account = consumer_account.split(".")[0].upper()
 
-        if id_res_version == "ID Resolution Native App":
-            script_list = []
-            script_conn_list = []
+        # prepare dimensions
+        if available_dimensions is None or available_dimensions == '':
+            available_dimensions = "''"
 
-            if account_type == "Provider":
-                path = path + "provider/app/"
-            else:
-                path = path + "consumer/app/"
+        script_list = []
+        script_conn_list = []
 
-            for file in glob.iglob(path + "*"):
-                script_list.append(os.path.basename(file))
-                script_conn_list.append(account_conn)
+        # if dcr_version == "DCR 6.0 Native App": TODO - Add later
+        if dcr_version == "DCR 5.5 General Availability":
+            if abbreviation == "":
+                abbreviation = "samp"
 
-            # List of connections does not need sorted, since they are all the same value
-            script_list.sort()
+            script_list = ["provider_add_template.sql"]
+            script_conn_list = [provider_conn]
 
-            check_words = []
-            replace_words = []
-
-            for key, value in options.items():
-                check_words.append("&" + key)
-                replace_words.append(value.upper())
-                check_words.append("&" + key.upper())
-                replace_words.append(value.upper())
+            check_words = ["PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_",
+                           "NEW_TEMPLATE_NAME", "new_template_name", "NEW_TEMPLATE_TEXT", "new_template_text",
+                           "NEW_DIMENSIONS", "new_dimensions"]
+            replace_words = [provider_account, provider_account, consumer_account, consumer_account,
+                             "_" + abbreviation +
+                             "_", "_" + abbreviation + "_",
+                             template_name, template_name, template_text, template_text,
+                             available_dimensions, available_dimensions]
 
             self.is_debug_mode = is_debug_mode
             self.path = path
@@ -314,24 +376,29 @@ class SnowflakeDcr:
                                     consumer_conn,
                                     provider_conn]
             else:
-                script_list = ["provider_init.sql", use_case_directory + "/provider_data.sql",
+                script_list = ["provider_init.sql",
+                               use_case_directory + "/provider_data.sql",
                                use_case_directory + "/provider_templates.sql",
                                "consumer_init_new_provider.sql",
                                "provider_enable_consumer.sql",
                                use_case_directory + "/consumer_request.sql"]
-                script_conn_list = [provider_conn, provider_conn,
+                script_conn_list = [provider_conn,
                                     provider_conn,
-                                    consumer_conn, consumer_conn,
+                                    provider_conn,
+                                    consumer_conn,
                                     provider_conn,
                                     None]
 
-            check_words = ["dcr_samp_app_two", "DCR_SAMP_APP_TWO", "PROVIDER2_ACCT", "provider2_acct",
-                           "PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_"]
-            replace_words = ["dcr_samp_app_" + app_suffix, "dcr_samp_app_" + app_suffix, provider_account,
-                             provider_account,
-                             provider_account, provider_account, consumer_account, consumer_account,
-                             "_" + abbreviation +
-                             "_", "_" + abbreviation + "_"]
+            check_words = ["dcr_samp_app_two", "DCR_SAMP_APP_TWO",
+                           "PROVIDER2_ACCT", "provider2_acct",
+                           "PROVIDER_ACCT", "provider_acct",
+                           "CONSUMER_ACCT", "consumer_acct",
+                           "_SAMP_", "_samp_"]
+            replace_words = ["dcr_samp_app_" + app_suffix, "dcr_samp_app_" + app_suffix,
+                             provider_account, provider_account,
+                             provider_account, provider_account,
+                             consumer_account, consumer_account,
+                             "_" + abbreviation + "_", "_" + abbreviation + "_"]
 
             self.is_debug_mode = is_debug_mode
             self.path = path
@@ -378,7 +445,6 @@ class SnowflakeDcr:
         self.check_words = check_words
         self.replace_words = replace_words
 
-    # Uninstalls DCRs for an account (provider or consumer)
     def prepare_uninstall(self, is_debug_mode, dcr_version, account_type, account, account_conn, consumer_account,
                           abbreviation, app_suffix, path):
         """
@@ -435,6 +501,46 @@ class SnowflakeDcr:
             check_words = ["PROVIDER_ACCT", "provider_acct", "CONSUMER_ACCT", "consumer_acct", "_SAMP_", "_samp_"]
             replace_words = [account, account, consumer_account, consumer_account, "_" + abbreviation + "_",
                              "_" + abbreviation + "_"]
+
+            self.is_debug_mode = is_debug_mode
+            self.path = path
+            self.script_list = script_list
+            self.script_conn_list = script_conn_list
+            self.check_words = check_words
+            self.replace_words = replace_words
+
+    def prepare_id_res_deployment(self, is_debug_mode, id_res_version, account, account_conn, account_type,
+                                  options, path):
+        """
+        Prepares object to deploy ID Resolution Native App
+        """
+        # prepare accounts
+        account = account.split(".")[0].upper()
+
+        if id_res_version == "ID Resolution Native App":
+            script_list = []
+            script_conn_list = []
+
+            if account_type == "Provider":
+                path = path + "provider/app/"
+            else:
+                path = path + "consumer/app/"
+
+            for file in glob.iglob(path + "*"):
+                script_list.append(os.path.basename(file))
+                script_conn_list.append(account_conn)
+
+            # List of connections does not need sorted, since they are all the same value
+            script_list.sort()
+
+            check_words = []
+            replace_words = []
+
+            for key, value in options.items():
+                check_words.append("&" + key)
+                replace_words.append(value.upper())
+                check_words.append("&" + key.upper())
+                replace_words.append(value.upper())
 
             self.is_debug_mode = is_debug_mode
             self.path = path
