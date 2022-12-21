@@ -24,7 +24,7 @@ Templates utilize [Jinja](https://jinja.palletsprojects.com/en/3.1.x/) and [Jinj
 Each script can be run as a batch, except consumer_request, which should be executed line-by-line. Run in this order:
 
 1. provider_init
-2. provider_data
+2. provider_data (or provider_data_onboarding for custom data)
 3. provider_templates
 4. consumer_init
 5. consumer_data

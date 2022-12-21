@@ -16,6 +16,20 @@ Date(yyyy-mm-dd)    Author                              Comments
 use role data_clean_room_role;
 
 //cleanup//
-drop share if exists dcr_samp_requests;
+show shares;
+execute immediate $$
+declare
+  res resultset default (select $3 as name from table(result_scan(last_query_id())) where $4 = 'DCR_SAMP_CONSUMER');
+  c1 cursor for res;
+  share_var string;
+begin
+  open c1;
+  for record in c1 do
+    share_var:=record.name;
+    execute immediate 'drop share if exists '|| :share_var;
+  end for;
+  return 'Shares deleted';
+end;
+$$;
 drop database if exists dcr_samp_consumer;
 drop database if exists dcr_samp_app;
