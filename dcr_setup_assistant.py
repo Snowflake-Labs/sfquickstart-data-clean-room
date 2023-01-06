@@ -20,8 +20,10 @@ col1, col2 = st.columns((6, 1))
 col1.title("🐻‍❄ DCR SETUP ASSISTANT 🐻‍❄️")
 col2.image("assets/snowflake_dcr_multi.png", width=120)
 st.sidebar.image("assets/bear_snowflake_hello.png")
-action = st.sidebar.radio("What action would you like to take?", ("Initial Deployment 🐻‍❄", "Add Add'l Consumer 🐧️",
-                                                                  "Add Add'l Provider ☃️", "Uninstall 💧"))
+action = st.sidebar.radio("What action would you like to take?", ("Initial Deployment 🐻‍❄",
+                                                                  # "Add Add'l Consumer 🐧️",
+                                                                  # "Add Add'l Provider ☃️",
+                                                                  "Uninstall 💧"))
 
 st.markdown("Generates scripts for managing version 5.5 Data Clean Rooms.")
 st.markdown("This sample code is provided for reference purposes only. Please note that this code is provided “AS IS” "
