@@ -94,7 +94,7 @@ group by
     {% endfor %}
 having count(distinct p.email)  > 25
 order by count(distinct p.email) desc;
-$$,'c.pets|c.zip|p.status|p.age_band', 'SQL');
+$$,'c.pets|c.zip|p.status|p.age_band|p2.status|p2.age_band', 'SQL');
 
 
 insert into dcr_samp_provider_db.templates.dcr_templates (party_account,template_name, template, dimensions, template_type)
@@ -202,7 +202,7 @@ group by
     {% endfor %}
 having count(distinct p.email)  > 25
 order by count(distinct p.email) desc;
-$$,'c.pets|c.zip|c.high_value|p.status|p.age_band|p.region_code', 'SQL');
+$$,'c.pets|c.zip|c.high_value|p.status|p.age_band|p.region_code|p2.status|p2.age_band|p2.region_code|p3.status|p3.age_band|p3.region_code', 'SQL');
 
 
 // see templates

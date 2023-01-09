@@ -360,7 +360,7 @@ select * from dcr_samp_provider_db.admin.request_log where current_account() = p
 //////////////////
 
 create or replace row access policy dcr_samp_provider_db.shared_schema.data_firewall as (foo varchar) returns boolean ->
-    exists  (select request_id from dcr_samp_provider_db.admin.request_log w
+    exists  (select request_id from PROVIDER_ACCT.dcr_samp_provider_db.admin.request_log w
                where party_account=current_account()
                   and approved=true
                   and query_hash=sha2(current_statement()));

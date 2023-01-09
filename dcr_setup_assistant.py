@@ -21,8 +21,8 @@ col1.title("🐻‍❄ DCR SETUP ASSISTANT 🐻‍❄️")
 col2.image("assets/snowflake_dcr_multi.png", width=120)
 st.sidebar.image("assets/bear_snowflake_hello.png")
 action = st.sidebar.radio("What action would you like to take?", ("Initial Deployment 🐻‍❄",
-                                                                  # "Add Add'l Consumer 🐧️",
-                                                                  # "Add Add'l Provider ☃️",
+                                                                  "Add Add'l Consumer 🐧️",
+                                                                  "Add Add'l Provider ☃️",
                                                                   "Uninstall 💧"))
 
 st.markdown("Generates scripts for managing version 5.5 Data Clean Rooms.")

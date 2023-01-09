@@ -58,6 +58,8 @@ select REQUEST_ID, APPROVED, request:PROPOSED_QUERY::varchar from dcr_samp_app.c
 // run query (paste in the query text shown in the results of the above select .. from provider_log, and run it)
 
 
+
+
 // REQUEST 2, OVERLAP COUNT BOOLEAN OR JOIN ON EMAIL AND PHONE WITH WHERE CLAUSE
 
 // clean room app creates and signs the request
@@ -74,6 +76,9 @@ select * from dcr_samp_consumer.PROVIDER_ACCT_schema.requests;
 select REQUEST_ID, APPROVED, request:PROPOSED_QUERY::varchar from dcr_samp_app.cleanroom.provider_log;
 
 // run query (paste in the query text shown in the results of the above select .. from provider_log, and run it)
+
+
+
 
 // REQUEST 3, CAMPAIGN CONVERSION
 
@@ -92,15 +97,57 @@ select REQUEST_ID, APPROVED, request:PROPOSED_QUERY::varchar from dcr_samp_app.c
 // run query (paste in the query text shown in the results of the above select .. from provider_log, and run it)
 
 
-// REQUEST 4 - multiparty - provider 1, SUBSCRIBER OVERLAP COUNT JOIN ON EMAIL
 
 
+// REQUEST 4 - multiparty - provider 1, CUSTOMER OVERLAP COUNT JOIN ON EMAIL
+// see the templates
+select * from dcr_samp_app.cleanroom.templates;
+select * from dcr_samp_app_two.cleanroom.templates;
+
+// NOTE - the timestamp parameter must be in UTC to enable timezone compatibility across accounts
+set ts = SYSDATE();
+
+// clean room app creates and signs the request
+call dcr_samp_consumer.PROVIDER1_schema.request('customer_overlap_multiparty',
+        object_construct(
+            'dimensions',array_construct('p.status', 'c.pets', 'p.age_band')
+            )::varchar, NULL, $ts);
+
+// if multi-party, get request ID for use in second provider request
+set request_id1 = (select request_id from dcr_samp_consumer.PROVIDER1_schema.requests where request:REQUEST_PARAMS.at_timestamp::varchar=$ts);
+
+// wait 5-10 seconds for this query to show the request as approved
+select REQUEST_ID, APPROVED, request:PROPOSED_QUERY::varchar, * from dcr_samp_app.cleanroom.provider_log order by request_ts desc;
+
+
+// REQUEST 4 - multiparty - provider 2, CUSTOMER OVERLAP COUNT JOIN ON EMAIL
+// pass in request id from provider 1 request
+
+// clean room app creates and signs the request
+call dcr_samp_consumer.PROVIDER2_schema.request('customer_overlap_multiparty',
+        object_construct(
+            'dimensions',array_construct('p.status', 'c.pets', 'p.age_band')
+            )::varchar, $request_id1, $ts);
+
+
+// see requests from provider 2
+select * from dcr_samp_consumer.PROVIDER2_schema.requests;
+
+// wait 5-10 seconds for this query to show the request as approved
+select REQUEST_ID, APPROVED, request:PROPOSED_QUERY::varchar, * from dcr_samp_app_two.cleanroom.provider_log order by request_ts desc;
+
+// run query (paste in the query text shown in the results of the above select .. from provider_log, and run it
+
+
+
+
+// REQUEST 5 - multiparty - provider 1, SUBSCRIBER OVERLAP COUNT JOIN ON EMAIL
 // see the templates
 select * from dcr_samp_app.cleanroom.templates;
 select * from dcr_samp_app_two.cleanroom.templates;
 select * from dcr_samp_app_three.cleanroom.templates;
 
-// NOTE - the tiemstamp parameter must be in UTC to enable timezone compatibility across accounts
+// NOTE - the timestamp parameter must be in UTC to enable timezone compatibility across accounts
 set ts = SYSDATE();
 
 // clean room app creates and signs the request
@@ -116,8 +163,7 @@ set request_id1 = (select request_id from dcr_samp_consumer.PROVIDER1_schema.req
 select REQUEST_ID, APPROVED, request:PROPOSED_QUERY::varchar, * from dcr_samp_app.cleanroom.provider_log order by request_ts desc;
 
 
-
-// REQUEST 4 - multiparty - provider 2, SUBSCRIBER OVERLAP COUNT JOIN ON EMAIL
+// REQUEST 5 - multiparty - provider 2, SUBSCRIBER OVERLAP COUNT JOIN ON EMAIL
 // pass in request id from provider 1 request
 
 // clean room app creates and signs the request
@@ -134,7 +180,7 @@ set request_id2 = (select request_id from dcr_samp_consumer.PROVIDER2_schema.req
 select REQUEST_ID, APPROVED, request:PROPOSED_QUERY::varchar, * from dcr_samp_app_two.cleanroom.provider_log order by request_ts desc;
 
 
-// REQUEST 4 - multiparty - provider 3, SUBSCRIBER OVERLAP COUNT JOIN ON EMAIL
+// REQUEST 5 - multiparty - provider 3, SUBSCRIBER OVERLAP COUNT JOIN ON EMAIL
 // pass in request id from provider 2 request
 
 // clean room app creates and signs the request
@@ -151,3 +197,4 @@ select * from dcr_samp_consumer.PROVIDER3_schema.requests;
 select REQUEST_ID, APPROVED, request:PROPOSED_QUERY::varchar, * from dcr_samp_app_THREE.cleanroom.provider_log order by request_ts desc;
 
 // run query (paste in the query text shown in the results of the above select .. from provider_log, and run it
+
