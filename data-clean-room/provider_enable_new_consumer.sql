@@ -18,6 +18,7 @@ Date(yyyy-mm-dd)    Author                              Comments
                                                         task that was failing silently.
 2022-07-11          B. Klein                            Renamed _demo_ to _samp_ to support upgrades.
 2022-08-23          M. Rainey                           Remove differential privacy
+2023-02-02          B. Klein                            Added object comments for clarity
 *************************************************************************************************************/
 
 use role data_clean_room_role;
@@ -35,7 +36,8 @@ use warehouse app_wh;
 //////
 
 create or replace database dcr_samp_CONSUMER_ACCT from share CONSUMER_ACCT.dcr_samp_requests_PROVIDER_ACCT;
-create or replace stream dcr_samp_provider_db.admin.request_stream_CONSUMER_ACCT on table dcr_samp_CONSUMER_ACCT.PROVIDER_ACCT_schema.requests append_only = true show_initial_rows = true;
+create or replace stream dcr_samp_provider_db.admin.request_stream_CONSUMER_ACCT on table dcr_samp_CONSUMER_ACCT.PROVIDER_ACCT_schema.requests append_only = true show_initial_rows = true
+comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“provider”}}';
 
 
 CREATE OR REPLACE TASK dcr_samp_provider_db.admin.process_requests_CONSUMER_ACCT_1

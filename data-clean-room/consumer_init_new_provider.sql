@@ -14,6 +14,7 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-07-11          B. Klein                            Renamed _demo_ to _samp_ to support upgrades.
 2022-08-23          M. Rainey                           Remove differential privacy
 2022-11-08          B. Klein                            Python GA
+2023-02-02          B. Klein                            Added object comments for clarity
 *************************************************************************************************************/
 
 use role data_clean_room_role;
@@ -39,7 +40,8 @@ select * from dcr_samp_app_two.cleanroom.templates;
 
 create or replace schema dcr_samp_consumer.PROVIDER2_ACCT_schema;
 
-create or replace table dcr_samp_consumer.PROVIDER2_ACCT_schema.requests (request_id varchar(1000),request variant, signature varchar(1000));
+create or replace table dcr_samp_consumer.PROVIDER2_ACCT_schema.requests (request_id varchar(1000),request variant, signature varchar(1000))
+comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“consumer”}}';
 ALTER TABLE dcr_samp_consumer.PROVIDER2_ACCT_schema.requests SET CHANGE_TRACKING = TRUE;
 
 ///////
@@ -49,6 +51,7 @@ ALTER TABLE dcr_samp_consumer.PROVIDER2_ACCT_schema.requests SET CHANGE_TRACKING
 create or replace procedure dcr_samp_consumer.PROVIDER2_ACCT_schema.request(in_template varchar(1000), in_params varchar(10000), request_id varchar(1000), at_timestamp VARCHAR(30))
     returns variant
     language javascript
+    comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“consumer”}}'
     execute as owner as
     $$
     // get the provider account

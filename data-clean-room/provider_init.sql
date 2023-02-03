@@ -26,6 +26,7 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-08-30          D. Cole, B. Klein                   Added new javascript jinja template engine
 2022-10-24          B. Klein                            Separated framework code and demo data
 2022-11-08          B. Klein                            Python GA
+2023-02-02          B. Klein                            Added object comments for clarity
 *************************************************************************************************************/
 
 
@@ -77,6 +78,7 @@ create or replace function dcr_samp_provider_db.templates.get_sql_jinja(template
   runtime_version = 3.8
   handler='apply_sql_template'
   packages = ('six','jinja2==3.0.3','markupsafe')
+  comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“provider”}}'
 as
 $$
 # Most of the following code is copied from the jinjasql package, which is not included in Snowflake's python packages
@@ -321,7 +323,7 @@ $$;
 // CREATE PROVIDER_ACCT ACCOUNT TABLE
 //////
 
-create or replace table dcr_samp_provider_db.cleanroom.provider_account(account_name varchar(1000));
+create or replace table dcr_samp_provider_db.cleanroom.provider_account(account_name varchar(1000)) comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“provider”}}';
 
 // do this for each consumer account
 insert into dcr_samp_provider_db.cleanroom.provider_account (account_name)
@@ -334,10 +336,10 @@ select current_account();
 
 // TODO CONFIRM THIS IS ALL SQL SAFE (partially done with identifier and string parsing in jinja renderer)
 
-create or replace table dcr_samp_provider_db.templates.dcr_templates (party_account varchar(1000) ,template_name string, template string, dp_sensitivity int, dimensions varchar(2000), template_type string);
+create or replace table dcr_samp_provider_db.templates.dcr_templates (party_account varchar(1000) ,template_name string, template string, dp_sensitivity int, dimensions varchar(2000), template_type string) comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“provider”}}';
 
 // create a view to allow each consumer account to see their templates
-create or replace secure view dcr_samp_provider_db.cleanroom.templates as
+create or replace secure view dcr_samp_provider_db.cleanroom.templates comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“provider”}}' as
 select * from dcr_samp_provider_db.templates.dcr_templates  where current_account() = party_account;
 
 
@@ -348,10 +350,11 @@ select * from dcr_samp_provider_db.templates.dcr_templates  where current_accoun
 // create a request tracking table that will also contain allowed statements
 create or replace table dcr_samp_provider_db.admin.request_log
     (party_account varchar(1000), request_id varchar(1000), request_ts timestamp, request variant, query_hash varchar(1000),
-     template_name varchar(1000), epsilon double, sensitivity int,  app_instance_id varchar(1000), processed_ts timestamp, approved boolean, error varchar(1000));
+     template_name varchar(1000), epsilon double, sensitivity int,  app_instance_id varchar(1000), processed_ts timestamp, approved boolean, error varchar(1000))
+     comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“provider”}}';
 
 // create a dynamic secure view to allow each consumer to only see the status of their request rows
-create or replace secure view dcr_samp_provider_db.cleanroom.provider_log as
+create or replace secure view dcr_samp_provider_db.cleanroom.provider_log comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“provider”}}' as
 select * from dcr_samp_provider_db.admin.request_log where current_account() = party_account;
 
 

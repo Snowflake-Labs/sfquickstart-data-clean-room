@@ -28,6 +28,7 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-07-11          B. Klein                            Renamed _demo_ to _samp_ to support upgrades.
 2022-08-23          M. Rainey                           Remove differential privacy
 2022-11-08          B. Klein                            Python GA
+2023-02-02          B. Klein                            Added object comments for clarity
 *************************************************************************************************************/
 
 use role data_clean_room_role;
@@ -48,7 +49,8 @@ use warehouse app_wh;
 // NOTE show_initial_rows is not supposed to work across a share but it does and using here for ease of debugging
 
 create or replace database dcr_samp_CONSUMER_ACCT from share CONSUMER_ACCT.dcr_samp_requests_PROVIDER_ACCT;
-create or replace stream dcr_samp_provider_db.admin.request_stream_CONSUMER_ACCT on table dcr_samp_CONSUMER_ACCT.PROVIDER_ACCT_schema.requests append_only = true show_initial_rows = true;
+create or replace stream dcr_samp_provider_db.admin.request_stream_CONSUMER_ACCT on table dcr_samp_CONSUMER_ACCT.PROVIDER_ACCT_schema.requests append_only = true show_initial_rows = true
+comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“provider”}}';
 delete from dcr_samp_provider_db.admin.request_log;
 
 // see request status and streams
@@ -76,6 +78,7 @@ delete from dcr_samp_provider_db.admin.request_log;
 create or replace procedure dcr_samp_provider_db.admin.process_requests(party_account string)
 returns string
 language javascript
+comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“provider”}}'
 execute as owner
 as $$
 

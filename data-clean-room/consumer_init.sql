@@ -27,6 +27,7 @@ Date(yyyy-mm-dd)    Author                              Comments
 2022-08-30          D. Cole, B. Klein                   Added new javascript jinja template engine
 2022-10-25          B. Klein                            Separated framework code and demo data
 2022-11-08          B. Klein                            Python GA
+2023-02-02          B. Klein                            Added object comments for clarity
 *************************************************************************************************************/
 
 use role accountadmin;
@@ -76,6 +77,7 @@ create or replace function dcr_samp_consumer.util.get_sql_jinja(template string,
   runtime_version = 3.8
   handler='apply_sql_template'
   packages = ('six','jinja2==3.0.3','markupsafe')
+  comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“consumer”}}'
 as
 $$
 # Most of the following code is copied from the jinjasql package, which is not included in Snowflake's python packages
@@ -318,7 +320,9 @@ $$;
 
 //Additonal steps for V5.5
 create or replace schema dcr_samp_consumer.PROVIDER_ACCT_schema;
-create table dcr_samp_consumer.util.instance as select randstr(64,random()) as id ;
+create table dcr_samp_consumer.util.instance 
+comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“consumer”}}' 
+as select randstr(64,random()) as id;
 
 
 ///////
@@ -337,7 +341,8 @@ select * from dcr_samp_app.cleanroom.templates;
 ///////
 
 // create the request tables
-create or replace table dcr_samp_consumer.PROVIDER_ACCT_schema.requests (request_id varchar(1000),request variant, signature varchar(1000));
+create or replace table dcr_samp_consumer.PROVIDER_ACCT_schema.requests (request_id varchar(1000),request variant, signature varchar(1000))
+comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“consumer”}}';
 ALTER TABLE dcr_samp_consumer.PROVIDER_ACCT_schema.requests SET CHANGE_TRACKING = TRUE;
 
 // share the request table to the provider
@@ -358,6 +363,7 @@ alter share dcr_samp_requests_PROVIDER_ACCT add accounts = PROVIDER_ACCT;
 create or replace procedure dcr_samp_consumer.PROVIDER_ACCT_schema.request(in_template varchar(1000), in_params varchar(10000), request_id varchar(1000), at_timestamp VARCHAR(30))
     returns variant
     language javascript
+    comment='{"origin":"sf_ps_wls","name":"dcr","version":{"major":5, "minor":5},"attributes":{"component":"dcr",“role”:“consumer”}}'
     execute as owner as
     $$
     // get the provider account
