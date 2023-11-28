@@ -50,7 +50,7 @@ create warehouse if not exists app_wh;
 show shares;
 execute immediate $$
 declare
-  res resultset default (select $3 as name from table(result_scan(last_query_id())) where $4 = 'DCR_SAMP_CONSUMER');
+  res resultset default (select $4 as name from table(result_scan(last_query_id())) where $5 = 'DCR_SAMP_CONSUMER');
   c1 cursor for res;
   share_var string;
 begin
